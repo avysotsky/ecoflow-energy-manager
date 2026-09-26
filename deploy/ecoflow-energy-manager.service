@@ -6,6 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/home/user/ecoflow-energy-manager
+EnvironmentFile=%h/.config/ecoflow/energy-manager.env
 ExecStart=/home/user/.dotnet/dotnet /home/user/ecoflow-energy-manager/src/EcoFlow.EnergyManager/bin/Release/net8.0/EcoFlow.EnergyManager.dll
 Restart=on-failure
 RestartSec=30

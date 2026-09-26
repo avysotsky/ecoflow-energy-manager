@@ -13,6 +13,16 @@ public sealed record EnergyManagerOptions
     public double SystemEfficiency { get; init; } = 0.85;
     public double TemperatureCoefficientPerCelsius { get; init; } = -0.004;
     public int ForecastRunHourLocal { get; init; } = 23;
+    public int AccuracyWindowDays { get; init; } = 60;
+    public int MinimumAccuracySamples { get; init; } = 24;
+    public string[] WeatherModels { get; init; } =
+    [
+        "ecmwf_ifs025",
+        "icon_seamless",
+        "gfs_seamless",
+        "ecmwf_aifs025_single",
+    ];
+    public string PostgresConnectionString { get; init; } = string.Empty;
     public TimeSpan MaximumStatusAge { get; init; } = TimeSpan.FromMinutes(2);
     public TimeSpan MaximumForecastAge { get; init; } = TimeSpan.FromHours(1);
     public double ModerateExpectedGenerationKwh { get; init; } = 1.5;
@@ -37,6 +47,12 @@ public sealed record EnergyManagerOptions
         TemperatureCoefficientPerCelsius = ReadDouble(
             "ECOFLOW_TEMPERATURE_COEFFICIENT", -0.004, -0.02, 0),
         ForecastRunHourLocal = ReadInt("ECOFLOW_FORECAST_RUN_HOUR", 23, 0, 23),
+        AccuracyWindowDays = ReadInt("ECOFLOW_ACCURACY_WINDOW_DAYS", 60, 7, 365),
+        MinimumAccuracySamples = ReadInt("ECOFLOW_MIN_ACCURACY_SAMPLES", 24, 1, 10000),
+        WeatherModels = ReadList(
+            "ECOFLOW_WEATHER_MODELS",
+            ["ecmwf_ifs025", "icon_seamless", "gfs_seamless", "ecmwf_aifs025_single"]),
+        PostgresConnectionString = ReadRequiredString("ECOFLOW_POSTGRES_CONNECTION"),
         MaximumStatusAge = TimeSpan.FromMinutes(
             ReadDouble("ECOFLOW_MAX_STATUS_AGE_MINUTES", 2, 0.1, 60)),
         MaximumForecastAge = TimeSpan.FromMinutes(
@@ -72,6 +88,12 @@ public sealed record EnergyManagerOptions
         }
 
         _ = TimeZoneInfo.FindSystemTimeZoneById(TimeZone);
+
+        if (WeatherModels.Length == 0)
+        {
+            throw new InvalidOperationException("At least one weather model must be configured.");
+        }
+
         return this;
     }
 
@@ -79,6 +101,24 @@ public sealed record EnergyManagerOptions
         string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(name))
             ? fallback
             : Environment.GetEnvironmentVariable(name)!.Trim();
+
+    private static string ReadRequiredString(string name)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        return string.IsNullOrWhiteSpace(value)
+            ? throw new InvalidOperationException($"{name} is required.")
+            : value.Trim();
+    }
+
+    private static string[] ReadList(string name, string[] fallback)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        return string.IsNullOrWhiteSpace(value)
+            ? fallback
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+    }
 
     private static double ReadDouble(
         string name,

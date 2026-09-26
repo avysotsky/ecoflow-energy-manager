@@ -2,6 +2,6 @@ namespace EcoFlow.EnergyManager;
 
 public interface IWeatherProvider
 {
-    Task<SolarWeatherForecast> GetTomorrowForecastAsync(
+    Task<IReadOnlyList<ModelWeatherForecast>> GetTomorrowForecastsAsync(
         CancellationToken cancellationToken = default);
 }

@@ -6,6 +6,7 @@ var options = EnergyManagerOptions.FromEnvironment();
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.AddSingleton(options);
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpClient("bridge", client =>
 {
     client.BaseAddress = new Uri(
@@ -27,15 +28,24 @@ builder.Services.AddSingleton<IWeatherProvider>(services =>
     new OpenMeteoWeatherProvider(
         services.GetRequiredService<IHttpClientFactory>().CreateClient("weather"),
         options));
+builder.Services.AddSingleton<IActualWeatherProvider>(services =>
+    new OpenMeteoActualWeatherProvider(
+        services.GetRequiredService<IHttpClientFactory>().CreateClient("weather"),
+        options));
+builder.Services.AddSingleton<IWeatherDataStore, PostgresWeatherDataStore>();
 builder.Services.AddSingleton<SolarCalculator>();
+builder.Services.AddSingleton<ForecastSelector>();
 builder.Services.AddSingleton<IEnergyPolicy, DryRunEnergyPolicy>();
 builder.Services.AddSingleton(new DecisionAuditWriter(options.DecisionLogPath));
 builder.Services.AddSingleton<ForecastRunner>();
+builder.Services.AddSingleton<ActualWeatherCollector>();
 
 var runOnce = args.Contains("--once", StringComparer.OrdinalIgnoreCase);
-if (!runOnce)
+var collectActual = args.Contains("--collect-actual", StringComparer.OrdinalIgnoreCase);
+if (!runOnce && !collectActual)
 {
     builder.Services.AddHostedService<ForecastWorker>();
+    builder.Services.AddHostedService<ActualWeatherWorker>();
 }
 
 using var host = builder.Build();
@@ -44,6 +54,12 @@ if (runOnce)
 {
     var runner = host.Services.GetRequiredService<ForecastRunner>();
     return await runner.RunAsync(CancellationToken.None);
+}
+
+if (collectActual)
+{
+    var collector = host.Services.GetRequiredService<ActualWeatherCollector>();
+    return await collector.RunAsync(CancellationToken.None);
 }
 
 await host.RunAsync();
