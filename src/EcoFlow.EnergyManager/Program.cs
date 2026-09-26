@@ -1,49 +1,50 @@
 using EcoFlow.EnergyManager;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
-var bridgeUrl = Environment.GetEnvironmentVariable("ECOFLOW_BRIDGE_URL")
-    ?? "http://127.0.0.1:8765";
+var options = EnergyManagerOptions.FromEnvironment();
+var builder = Host.CreateApplicationBuilder(args);
 
-using var httpClient = new HttpClient
+builder.Services.AddSingleton(options);
+builder.Services.AddHttpClient("bridge", client =>
 {
-    BaseAddress = new Uri(bridgeUrl),
-    Timeout = TimeSpan.FromSeconds(10),
-};
-
-IEcoFlowGateway gateway = new LocalBridgeEcoFlowGateway(httpClient);
-
-try
+    client.BaseAddress = new Uri(
+        Environment.GetEnvironmentVariable("ECOFLOW_BRIDGE_URL") ??
+        "http://127.0.0.1:8765");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddHttpClient("weather", client =>
 {
-    var status = await gateway.GetStatusAsync();
-    Console.WriteLine($"Device:       {status.Model ?? "unknown"}");
-    Console.WriteLine($"BLE:          {(status.Authenticated ? "authenticated" : status.BridgeState)}");
-    Console.WriteLine($"Battery:      {Format(status.BatteryLevel, "%")}");
-    Console.WriteLine($"Input power:  {Format(status.InputPowerW, "W")}");
-    Console.WriteLine($"Output power: {Format(status.OutputPowerW, "W")}");
-    Console.WriteLine($"AC ports:     {FormatSwitch(status.AcPorts)}");
-    Console.WriteLine($"12V port:     {FormatSwitch(status.Dc12VPort)}");
-    Console.WriteLine($"Charge range: {Format(status.ChargeLimitMin, "%")} - {Format(status.ChargeLimitMax, "%")}");
-    Console.WriteLine($"Sampled UTC:  {status.SampledUtc:O}");
+    client.BaseAddress = new Uri(
+        Environment.GetEnvironmentVariable("OPEN_METEO_URL") ??
+        "https://api.open-meteo.com/v1/forecast");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+builder.Services.AddSingleton<IEcoFlowGateway>(services =>
+    new LocalBridgeEcoFlowGateway(
+        services.GetRequiredService<IHttpClientFactory>().CreateClient("bridge")));
+builder.Services.AddSingleton<IWeatherProvider>(services =>
+    new OpenMeteoWeatherProvider(
+        services.GetRequiredService<IHttpClientFactory>().CreateClient("weather"),
+        options));
+builder.Services.AddSingleton<SolarCalculator>();
+builder.Services.AddSingleton<IEnergyPolicy, DryRunEnergyPolicy>();
+builder.Services.AddSingleton(new DecisionAuditWriter(options.DecisionLogPath));
+builder.Services.AddSingleton<ForecastRunner>();
 
-    if (!status.Authenticated)
-    {
-        Console.Error.WriteLine($"Bridge error: {status.LastError ?? "not connected"}");
-        return 2;
-    }
-
-    return 0;
+var runOnce = args.Contains("--once", StringComparer.OrdinalIgnoreCase);
+if (!runOnce)
+{
+    builder.Services.AddHostedService<ForecastWorker>();
 }
-catch (Exception error)
+
+using var host = builder.Build();
+
+if (runOnce)
 {
-    Console.Error.WriteLine($"EcoFlow status failed: {error.Message}");
-    return 1;
+    var runner = host.Services.GetRequiredService<ForecastRunner>();
+    return await runner.RunAsync(CancellationToken.None);
 }
 
-static string Format(double? value, string unit) =>
-    value is null ? "unknown" : $"{value:0.##} {unit}";
-
-static string FormatSwitch(bool? value) => value switch
-{
-    true => "on",
-    false => "off",
-    null => "unknown",
-};
+await host.RunAsync();
+return 0;

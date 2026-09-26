@@ -7,6 +7,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{0EF24815-9EB
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EcoFlow.EnergyManager", "src\EcoFlow.EnergyManager\EcoFlow.EnergyManager.csproj", "{C78403AC-DD77-40D5-8C5B-4C2B79D97FAD}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EcoFlow.EnergyManager.Tests", "tests\EcoFlow.EnergyManager.Tests\EcoFlow.EnergyManager.Tests.csproj", "{6C4C2807-8B93-4B5E-BBF2-E1FE41F0B70A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,6 +22,10 @@ Global
 		{C78403AC-DD77-40D5-8C5B-4C2B79D97FAD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C78403AC-DD77-40D5-8C5B-4C2B79D97FAD}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C78403AC-DD77-40D5-8C5B-4C2B79D97FAD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6C4C2807-8B93-4B5E-BBF2-E1FE41F0B70A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6C4C2807-8B93-4B5E-BBF2-E1FE41F0B70A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6C4C2807-8B93-4B5E-BBF2-E1FE41F0B70A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6C4C2807-8B93-4B5E-BBF2-E1FE41F0B70A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{C78403AC-DD77-40D5-8C5B-4C2B79D97FAD} = {0EF24815-9EB1-4947-97DE-F44BB2101971}
