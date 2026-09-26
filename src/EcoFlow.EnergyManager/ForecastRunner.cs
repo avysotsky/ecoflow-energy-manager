@@ -8,7 +8,7 @@ public sealed class ForecastRunner(
     IWeatherDataStore weatherDataStore,
     IEnergyPolicy policy,
     DecisionAuditWriter auditWriter,
-    EnergyManagerOptions options)
+    IRuntimeSettingsProvider settingsProvider)
 {
     public async Task<int> RunAsync(CancellationToken cancellationToken)
     {
@@ -35,7 +35,7 @@ public sealed class ForecastRunner(
             PrintDecision(decision);
 
             await auditWriter.AppendAsync(status, forecast, decision, cancellationToken);
-            Console.WriteLine($"Audit log:    {options.DecisionLogPath}");
+            Console.WriteLine($"Audit log:    {settingsProvider.Current.DecisionLogPath}");
             return decision.IsActionable ? 0 : 2;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

@@ -3,23 +3,41 @@ using System.Text.Json;
 
 namespace EcoFlow.EnergyManager;
 
-public sealed class OpenMeteoWeatherProvider(
-    HttpClient httpClient,
-    EnergyManagerOptions options,
-    TimeProvider? timeProvider = null) : IWeatherProvider
+public sealed class OpenMeteoWeatherProvider : IWeatherProvider
 {
-    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+    private readonly HttpClient _httpClient;
+    private readonly IRuntimeSettingsProvider _settingsProvider;
+    private readonly TimeProvider _timeProvider;
+
+    public OpenMeteoWeatherProvider(
+        HttpClient httpClient,
+        IRuntimeSettingsProvider settingsProvider,
+        TimeProvider? timeProvider = null)
+    {
+        _httpClient = httpClient;
+        _settingsProvider = settingsProvider;
+        _timeProvider = timeProvider ?? TimeProvider.System;
+    }
+
+    public OpenMeteoWeatherProvider(
+        HttpClient httpClient,
+        EnergyManagerOptions options,
+        TimeProvider? timeProvider = null)
+        : this(httpClient, new FixedRuntimeSettingsProvider(options), timeProvider)
+    {
+    }
 
     public async Task<IReadOnlyList<ModelWeatherForecast>> GetTomorrowForecastsAsync(
         CancellationToken cancellationToken = default)
     {
+        var options = _settingsProvider.Current;
         var timeZone = TimeZoneInfo.FindSystemTimeZoneById(options.TimeZone);
         var nowUtc = _timeProvider.GetUtcNow();
         var tomorrow = DateOnly.FromDateTime(
             TimeZoneInfo.ConvertTime(nowUtc, timeZone).DateTime).AddDays(1);
 
-        var query = BuildQuery(tomorrow);
-        using var response = await httpClient.GetAsync(query, cancellationToken);
+        var query = BuildQuery(tomorrow, options);
+        using var response = await _httpClient.GetAsync(query, cancellationToken);
         response.EnsureSuccessStatusCode();
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
@@ -97,7 +115,7 @@ public sealed class OpenMeteoWeatherProvider(
         return forecasts;
     }
 
-    private string BuildQuery(DateOnly tomorrow)
+    private static string BuildQuery(DateOnly tomorrow, EnergyManagerOptions options)
     {
         var latitude = options.Latitude.ToString(CultureInfo.InvariantCulture);
         var longitude = options.Longitude.ToString(CultureInfo.InvariantCulture);

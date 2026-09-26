@@ -4,14 +4,15 @@ namespace EcoFlow.EnergyManager;
 
 public sealed class PostgresWeatherDataStore : IWeatherDataStore, IAsyncDisposable
 {
-    private readonly EnergyManagerOptions _options;
+    private readonly IRuntimeSettingsProvider _settingsProvider;
     private readonly NpgsqlDataSource _dataSource;
     private readonly SemaphoreSlim _initializationLock = new(1, 1);
     private bool _initialized;
 
-    public PostgresWeatherDataStore(EnergyManagerOptions options)
+    public PostgresWeatherDataStore(IRuntimeSettingsProvider settingsProvider)
     {
-        _options = options;
+        _settingsProvider = settingsProvider;
+        var options = settingsProvider.Current;
         _dataSource = NpgsqlDataSource.Create(options.PostgresConnectionString);
     }
 
@@ -41,12 +42,13 @@ public sealed class PostgresWeatherDataStore : IWeatherDataStore, IAsyncDisposab
             transaction);
         runCommand.Parameters.AddWithValue("fetched_utc", first.FetchedUtc);
         runCommand.Parameters.AddWithValue("forecast_date", first.ForecastDate);
-        runCommand.Parameters.AddWithValue("latitude", _options.Latitude);
-        runCommand.Parameters.AddWithValue("longitude", _options.Longitude);
+        var options = _settingsProvider.Current;
+        runCommand.Parameters.AddWithValue("latitude", options.Latitude);
+        runCommand.Parameters.AddWithValue("longitude", options.Longitude);
         var runId = (long)(await runCommand.ExecuteScalarAsync(cancellationToken)
             ?? throw new InvalidOperationException("PostgreSQL did not return a forecast run id."));
 
-        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(_options.TimeZone);
+        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(options.TimeZone);
         foreach (var modelForecast in forecasts)
         {
             var forecast = modelForecast.Forecast;
@@ -134,7 +136,7 @@ public sealed class PostgresWeatherDataStore : IWeatherDataStore, IAsyncDisposab
         CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken);
-        var windowStart = DateTimeOffset.UtcNow.AddDays(-_options.AccuracyWindowDays);
+        var windowStart = DateTimeOffset.UtcNow.AddDays(-_settingsProvider.Current.AccuracyWindowDays);
         await using var command = _dataSource.CreateCommand(
             """
             WITH ranked AS

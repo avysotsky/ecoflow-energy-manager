@@ -1,11 +1,21 @@
 using EcoFlow.EnergyManager;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
-var options = EnergyManagerOptions.FromEnvironment();
-var builder = Host.CreateApplicationBuilder(args);
+var defaults = EnergyManagerOptions.FromEnvironment();
+var settingsPath = Environment.GetEnvironmentVariable("ECOFLOW_SETTINGS_PATH");
+if (string.IsNullOrWhiteSpace(settingsPath))
+{
+    settingsPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "ecoflow-energy-manager",
+        "settings.json");
+}
 
-builder.Services.AddSingleton(options);
+var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.UseUrls(
+    Environment.GetEnvironmentVariable("ECOFLOW_WEB_URLS") ?? "http://127.0.0.1:5080");
+
+builder.Services.AddSingleton<IRuntimeSettingsProvider>(
+    new RuntimeSettingsProvider(defaults, settingsPath));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpClient("bridge", client =>
 {
@@ -27,16 +37,16 @@ builder.Services.AddSingleton<IEcoFlowGateway>(services =>
 builder.Services.AddSingleton<IWeatherProvider>(services =>
     new OpenMeteoWeatherProvider(
         services.GetRequiredService<IHttpClientFactory>().CreateClient("weather"),
-        options));
+        services.GetRequiredService<IRuntimeSettingsProvider>()));
 builder.Services.AddSingleton<IActualWeatherProvider>(services =>
     new OpenMeteoActualWeatherProvider(
         services.GetRequiredService<IHttpClientFactory>().CreateClient("weather"),
-        options));
+        services.GetRequiredService<IRuntimeSettingsProvider>()));
 builder.Services.AddSingleton<IWeatherDataStore, PostgresWeatherDataStore>();
 builder.Services.AddSingleton<SolarCalculator>();
 builder.Services.AddSingleton<ForecastSelector>();
 builder.Services.AddSingleton<IEnergyPolicy, DryRunEnergyPolicy>();
-builder.Services.AddSingleton(new DecisionAuditWriter(options.DecisionLogPath));
+builder.Services.AddSingleton(new DecisionAuditWriter(defaults.DecisionLogPath));
 builder.Services.AddSingleton<ForecastRunner>();
 builder.Services.AddSingleton<ActualWeatherCollector>();
 
@@ -48,19 +58,70 @@ if (!runOnce && !collectActual)
     builder.Services.AddHostedService<ActualWeatherWorker>();
 }
 
-using var host = builder.Build();
+await using var app = builder.Build();
 
 if (runOnce)
 {
-    var runner = host.Services.GetRequiredService<ForecastRunner>();
+    var runner = app.Services.GetRequiredService<ForecastRunner>();
     return await runner.RunAsync(CancellationToken.None);
 }
 
 if (collectActual)
 {
-    var collector = host.Services.GetRequiredService<ActualWeatherCollector>();
+    var collector = app.Services.GetRequiredService<ActualWeatherCollector>();
     return await collector.RunAsync(CancellationToken.None);
 }
 
-await host.RunAsync();
+app.UseDefaultFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = context =>
+    {
+        context.Context.Response.Headers.CacheControl = "no-cache";
+    },
+});
+
+app.MapGet("/api/status", async (
+    IEcoFlowGateway gateway,
+    IRuntimeSettingsProvider settingsProvider,
+    TimeProvider timeProvider,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var status = await gateway.GetStatusAsync(cancellationToken);
+        var now = timeProvider.GetUtcNow();
+        var age = now - status.SampledUtc;
+        var stale = status.SampledUtc == default ||
+            age < TimeSpan.Zero ||
+            age > settingsProvider.Current.MaximumStatusAge;
+        return Results.Ok(DashboardStatus.FromStatus(status, stale));
+    }
+    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+    {
+        throw;
+    }
+    catch
+    {
+        return Results.Ok(DashboardStatus.Unavailable());
+    }
+});
+
+app.MapGet("/api/settings", (IRuntimeSettingsProvider settingsProvider) =>
+    Results.Ok(settingsProvider.PublicSettings));
+
+app.MapPut("/api/settings", async (
+    RuntimeSettings settings,
+    IRuntimeSettingsProvider settingsProvider,
+    CancellationToken cancellationToken) =>
+{
+    var errors = await settingsProvider.UpdateAsync(settings, cancellationToken);
+    return errors.Count == 0
+        ? Results.Ok(settingsProvider.PublicSettings)
+        : Results.ValidationProblem(errors.ToDictionary(item => item.Key, item => item.Value));
+});
+
+await app.RunAsync();
 return 0;
+
+public partial class Program;

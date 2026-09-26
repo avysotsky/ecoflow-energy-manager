@@ -1,6 +1,6 @@
 # EcoFlow Energy Manager
 
-Cross-platform .NET 8 Worker Service for local EcoFlow energy management. It reads an
+Cross-platform .NET 8 local web application and Worker Service for EcoFlow energy management. It reads an
 EcoFlow DELTA 2 Max through a localhost-only BLE bridge, forecasts tomorrow's output
 of a south-facing 1 kW solar array, stores weather history in PostgreSQL, compares
 weather models with actual temperatures, and records a safe dry-run charge-limit
@@ -25,6 +25,7 @@ recommendation.
 - appends every decision to a local JSONL audit log;
 - uses no EcoFlow cloud connection during normal status reads.
 - never sends a control command to the device.
+- serves a responsive Russian/English dashboard with live status and safe runtime settings.
 
 ## Open in Visual Studio
 
@@ -37,8 +38,18 @@ SDK if Visual Studio does not already include it.
 /home/user/.dotnet/dotnet run --project /home/user/ecoflow-energy-manager/src/EcoFlow.EnergyManager
 ```
 
-The default process is a Worker that calculates the next-day forecast every day at
-23:00 `Europe/Kyiv`. Run one calculation immediately with:
+The default process starts the existing background workers and a dashboard at
+`http://127.0.0.1:5080`. Status is refreshed in the browser every two seconds. The web
+server binds only to localhost by default. The forecast Worker calculates the next-day
+forecast every day at 23:00 `Europe/Kyiv`.
+
+Override the listener only when the network exposure has been reviewed explicitly:
+
+```text
+ECOFLOW_WEB_URLS=http://127.0.0.1:5080
+```
+
+Run one calculation immediately with:
 
 ```bash
 /home/user/.dotnet/dotnet run --project /home/user/ecoflow-energy-manager/src/EcoFlow.EnergyManager -- --once
@@ -47,6 +58,37 @@ The default process is a Worker that calculates the next-day forecast every day 
 The Linux BLE bridge listens only on `127.0.0.1:8765`. Its URL can be overridden with
 the `ECOFLOW_BRIDGE_URL` environment variable. Account credentials, EcoFlow User ID,
 device serial number, and other private configuration are not stored in this repository.
+
+`--once` and `--collect-actual` run their original one-shot operations without starting
+the web server or background workers.
+
+## Local dashboard and API
+
+The dashboard shows bridge connection/authentication, battery level, input/output and
+net power, AC and 12 V state, configured device charge limits, sample time, and
+stale/error state. Device model, serial number, account identifiers, bridge URL, database
+connection, and raw bridge errors are never returned by the dashboard API.
+
+Endpoints:
+
+- `GET /api/status` — sanitized live status from `IEcoFlowGateway`;
+- `GET /api/settings` — editable safe application settings;
+- `PUT /api/settings` — validate, persist, and atomically apply safe settings.
+
+**The displayed charge limits are read-only. Device control is not implemented.**
+
+Settings are stored outside the repository by default at
+`~/.local/share/ecoflow-energy-manager/settings.json` on Linux. Override the path with
+`ECOFLOW_SETTINGS_PATH`. The first run uses environment values as defaults; once the
+JSON file exists, its safe fields override those defaults. Writes are atomic and the
+file mode is restricted to the current user on Unix.
+
+Editable fields are coordinates, IANA timezone, nominal PV power, panel tilt and
+azimuth, system efficiency, temperature coefficient, forecast hour, policy generation
+thresholds and recommended limits, and BLE/forecast freshness limits. Every value is
+range-checked; the high generation threshold must exceed the moderate threshold, and
+recommended limits must not decrease from high-solar to low-solar conditions. Changes
+apply without restart, including recalculation of the next scheduled forecast time.
 
 ## PostgreSQL weather history
 
@@ -102,6 +144,7 @@ All values are configurable with environment variables:
 - `ECOFLOW_HIGH_SOLAR_LIMIT`, `ECOFLOW_MODERATE_SOLAR_LIMIT`, `ECOFLOW_LOW_SOLAR_LIMIT`;
 - `ECOFLOW_MAX_STATUS_AGE_MINUTES`, `ECOFLOW_MAX_FORECAST_AGE_MINUTES`;
 - `ECOFLOW_DECISION_LOG`, `OPEN_METEO_URL`.
+- `ECOFLOW_WEB_URLS`, `ECOFLOW_SETTINGS_PATH`.
 
 The default audit log is stored outside the repository under the user's local
 application-data directory.

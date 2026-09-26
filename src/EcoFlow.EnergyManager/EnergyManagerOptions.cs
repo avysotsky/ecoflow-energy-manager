@@ -72,7 +72,7 @@ public sealed record EnergyManagerOptions
                 "decisions.jsonl")),
     }.Validate();
 
-    private EnergyManagerOptions Validate()
+    public EnergyManagerOptions Validate()
     {
         if (HighExpectedGenerationKwh <= ModerateExpectedGenerationKwh)
         {

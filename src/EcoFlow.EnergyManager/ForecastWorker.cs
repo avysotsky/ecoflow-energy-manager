@@ -5,7 +5,7 @@ namespace EcoFlow.EnergyManager;
 
 public sealed class ForecastWorker(
     ForecastRunner runner,
-    EnergyManagerOptions options,
+    IRuntimeSettingsProvider settingsProvider,
     TimeProvider timeProvider,
     ILogger<ForecastWorker> logger) : BackgroundService
 {
@@ -13,7 +13,7 @@ public sealed class ForecastWorker(
         ForecastRunner runner,
         EnergyManagerOptions options,
         ILogger<ForecastWorker> logger)
-        : this(runner, options, TimeProvider.System, logger)
+        : this(runner, new FixedRuntimeSettingsProvider(options), TimeProvider.System, logger)
     {
     }
 
@@ -22,11 +22,19 @@ public sealed class ForecastWorker(
         while (!stoppingToken.IsCancellationRequested)
         {
             var delay = GetDelayUntilNextRun(timeProvider.GetUtcNow());
+            var settingsChanged = settingsProvider.SettingsChanged;
             logger.LogInformation(
                 "Next solar forecast calculation in {Delay}",
                 delay);
 
-            await Task.Delay(delay, timeProvider, stoppingToken);
+            var scheduledDelay = Task.Delay(delay, timeProvider, stoppingToken);
+            if (await Task.WhenAny(scheduledDelay, settingsChanged) == settingsChanged)
+            {
+                logger.LogInformation("Forecast schedule changed; recalculating next run time");
+                continue;
+            }
+
+            await scheduledDelay;
             var exitCode = await runner.RunAsync(stoppingToken);
             if (exitCode != 0)
             {
@@ -39,6 +47,7 @@ public sealed class ForecastWorker(
 
     internal TimeSpan GetDelayUntilNextRun(DateTimeOffset nowUtc)
     {
+        var options = settingsProvider.Current;
         var timeZone = TimeZoneInfo.FindSystemTimeZoneById(options.TimeZone);
         var localNow = TimeZoneInfo.ConvertTime(nowUtc, timeZone);
         var nextLocal = localNow.Date.AddHours(options.ForecastRunHourLocal);

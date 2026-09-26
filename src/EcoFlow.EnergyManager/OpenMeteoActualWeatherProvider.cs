@@ -4,13 +4,28 @@ using System.Text.Json.Serialization;
 
 namespace EcoFlow.EnergyManager;
 
-public sealed class OpenMeteoActualWeatherProvider(
-    HttpClient httpClient,
-    EnergyManagerOptions options) : IActualWeatherProvider
+public sealed class OpenMeteoActualWeatherProvider : IActualWeatherProvider
 {
+    private readonly HttpClient _httpClient;
+    private readonly IRuntimeSettingsProvider _settingsProvider;
+
+    public OpenMeteoActualWeatherProvider(
+        HttpClient httpClient,
+        IRuntimeSettingsProvider settingsProvider)
+    {
+        _httpClient = httpClient;
+        _settingsProvider = settingsProvider;
+    }
+
+    public OpenMeteoActualWeatherProvider(HttpClient httpClient, EnergyManagerOptions options)
+        : this(httpClient, new FixedRuntimeSettingsProvider(options))
+    {
+    }
+
     public async Task<WeatherObservation> GetCurrentAsync(
         CancellationToken cancellationToken = default)
     {
+        var options = _settingsProvider.Current;
         var latitude = options.Latitude.ToString(CultureInfo.InvariantCulture);
         var longitude = options.Longitude.ToString(CultureInfo.InvariantCulture);
         var query =
@@ -18,7 +33,7 @@ public sealed class OpenMeteoActualWeatherProvider(
             "&current=temperature_2m" +
             $"&timezone={Uri.EscapeDataString(options.TimeZone)}";
 
-        var response = await httpClient.GetFromJsonAsync<CurrentWeatherResponse>(
+        var response = await _httpClient.GetFromJsonAsync<CurrentWeatherResponse>(
             query,
             cancellationToken) ?? throw new InvalidOperationException(
                 "Open-Meteo returned an empty current-weather response.");

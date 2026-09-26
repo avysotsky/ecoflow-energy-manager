@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'">
+  <title>EcoFlow Energy Manager</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow" data-i18n="localDashboard">Локальная панель</p>
+      <h1>EcoFlow Energy Manager</h1>
+    </div>
+    <div class="topbar-actions">
+      <div class="language-switcher" role="group" aria-label="Язык" data-i18n-aria-label="language">
+        <button type="button" class="language-button" data-language="ru" aria-pressed="true">RU</button>
+        <button type="button" class="language-button" data-language="en" aria-pressed="false">EN</button>
+      </div>
+      <div id="overall-state" class="state state-wait">Загрузка…</div>
+    </div>
+  </header>
+
+  <main>
+    <section aria-labelledby="status-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">DELTA 2 Max</p>
+          <h2 id="status-title" data-i18n="currentStatus">Текущее состояние</h2>
+        </div>
+        <p id="sampled" class="muted">Нет данных</p>
+      </div>
+
+      <div id="status-alert" class="alert hidden" role="status"></div>
+      <div class="status-grid">
+        <article class="card hero-card">
+          <span data-i18n="battery">Батарея</span>
+          <strong id="battery">—</strong>
+          <div class="battery-track" aria-hidden="true"><i id="battery-bar"></i></div>
+        </article>
+        <article class="card"><span data-i18n="input">Вход</span><strong id="input-power">—</strong></article>
+        <article class="card"><span data-i18n="output">Выход</span><strong id="output-power">—</strong></article>
+        <article class="card"><span data-i18n="balance">Баланс</span><strong id="net-power">—</strong><small data-i18n="positiveMeansCharging">«+» — заряд</small></article>
+        <article class="card"><span data-i18n="bleBridge">BLE-мост</span><strong id="bridge">—</strong></article>
+        <article class="card"><span data-i18n="connection">Соединение</span><strong id="connected">—</strong></article>
+        <article class="card"><span data-i18n="authentication">Авторизация</span><strong id="authenticated">—</strong></article>
+        <article class="card"><span data-i18n="ports">AC / 12 В</span><strong id="ports">—</strong></article>
+        <article class="card"><span data-i18n="chargeLimits">Лимиты заряда</span><strong id="charge-limits">—</strong><small data-i18n="readOnly">только чтение</small></article>
+      </div>
+    </section>
+
+    <section class="settings-section" aria-labelledby="settings-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow" data-i18n="noDeviceControl">Без управления устройством</p>
+          <h2 id="settings-title" data-i18n="calculationSettings">Настройки расчёта</h2>
+        </div>
+        <p class="muted" data-i18n="settingsHint">Сохраняются локально и применяются без перезапуска</p>
+      </div>
+
+      <form id="settings-form" novalidate>
+        <fieldset>
+          <legend data-i18n="locationAndSchedule">Место и расписание</legend>
+          <div class="form-grid">
+            <label><span data-i18n="latitude">Широта</span><input name="latitude" type="number" min="-90" max="90" step="0.0001" required><small data-error="latitude"></small></label>
+            <label><span data-i18n="longitude">Долгота</span><input name="longitude" type="number" min="-180" max="180" step="0.0001" required><small data-error="longitude"></small></label>
+            <label><span data-i18n="timeZone">Часовой пояс IANA</span><input name="timeZone" type="text" maxlength="100" required><small data-error="timeZone"></small></label>
+            <label><span data-i18n="forecastHour">Час прогноза</span><input name="forecastRunHourLocal" type="number" min="0" max="23" step="1" required><small data-error="forecastRunHourLocal"></small></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend data-i18n="solarInstallation">Солнечная установка</legend>
+          <div class="form-grid">
+            <label><span data-i18n="nominalPower">Номинальная мощность, кВт</span><input name="nominalPowerKw" type="number" min="0.01" max="1000" step="0.01" required><small data-error="nominalPowerKw"></small></label>
+            <label><span data-i18n="tilt">Наклон, °</span><input name="panelTiltDegrees" type="number" min="0" max="90" step="0.1" required><small data-error="panelTiltDegrees"></small></label>
+            <label><span data-i18n="azimuth">Азимут, °</span><input name="panelAzimuthDegrees" type="number" min="-180" max="180" step="0.1" required><small data-error="panelAzimuthDegrees"></small></label>
+            <label><span data-i18n="efficiency">Эффективность</span><input name="systemEfficiency" type="number" min="0.1" max="1" step="0.01" required><small data-error="systemEfficiency"></small></label>
+            <label><span data-i18n="temperatureCoefficient">Темп. коэффициент /°C</span><input name="temperatureCoefficientPerCelsius" type="number" min="-0.02" max="0" step="0.0001" required><small data-error="temperatureCoefficientPerCelsius"></small></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend data-i18n="thresholdPolicy">Пороговая политика (рекомендации)</legend>
+          <div class="form-grid">
+            <label><span data-i18n="moderateThreshold">Средний порог, кВт·ч</span><input name="moderateExpectedGenerationKwh" type="number" min="0" max="1000" step="0.1" required><small data-error="moderateExpectedGenerationKwh"></small></label>
+            <label><span data-i18n="highThreshold">Высокий порог, кВт·ч</span><input name="highExpectedGenerationKwh" type="number" min="0" max="1000" step="0.1" required><small data-error="highExpectedGenerationKwh"></small></label>
+            <label><span data-i18n="highGenerationLimit">Лимит при высокой генерации, %</span><input name="highSolarChargeLimit" type="number" min="50" max="100" step="1" required><small data-error="highSolarChargeLimit"></small></label>
+            <label><span data-i18n="moderateGenerationLimit">Лимит при средней генерации, %</span><input name="moderateSolarChargeLimit" type="number" min="50" max="100" step="1" required><small data-error="moderateSolarChargeLimit"></small></label>
+            <label><span data-i18n="lowGenerationLimit">Лимит при низкой генерации, %</span><input name="lowSolarChargeLimit" type="number" min="50" max="100" step="1" required><small data-error="lowSolarChargeLimit"></small></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend data-i18n="acceptableFreshness">Допустимая свежесть</legend>
+          <div class="form-grid">
+            <label><span data-i18n="bleStatusMinutes">Статус BLE, минут</span><input name="maximumStatusAgeMinutes" type="number" min="0.1" max="60" step="0.1" required><small data-error="maximumStatusAgeMinutes"></small></label>
+            <label><span data-i18n="forecastMinutes">Прогноз, минут</span><input name="maximumForecastAgeMinutes" type="number" min="1" max="1440" step="1" required><small data-error="maximumForecastAgeMinutes"></small></label>
+          </div>
+        </fieldset>
+
+        <div class="form-actions">
+          <button type="submit" data-i18n="saveSettings">Сохранить настройки</button>
+          <span id="settings-result" role="status"></span>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <footer data-i18n="footer">Лимиты заряда отображаются только для чтения. Управление устройством не реализовано.</footer>
+</body>
+</html>

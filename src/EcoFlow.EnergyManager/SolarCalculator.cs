@@ -1,9 +1,15 @@
 namespace EcoFlow.EnergyManager;
 
-public sealed class SolarCalculator(EnergyManagerOptions options)
+public sealed class SolarCalculator(IRuntimeSettingsProvider settingsProvider)
 {
+    public SolarCalculator(EnergyManagerOptions options)
+        : this(new FixedRuntimeSettingsProvider(options))
+    {
+    }
+
     public SolarForecast Calculate(SolarWeatherForecast weather)
     {
+        var options = settingsProvider.Current;
         var hours = new List<HourlyGeneration>(weather.Hours.Count);
         var totalEnergyKwh = 0d;
         var totalTiltedIrradiationWhM2 = 0d;

@@ -1,7 +1,12 @@
 namespace EcoFlow.EnergyManager;
 
-public sealed class ForecastSelector(EnergyManagerOptions options)
+public sealed class ForecastSelector(IRuntimeSettingsProvider settingsProvider)
 {
+    public ForecastSelector(EnergyManagerOptions options)
+        : this(new FixedRuntimeSettingsProvider(options))
+    {
+    }
+
     public ForecastSelection Select(
         IReadOnlyList<ModelWeatherForecast> forecasts,
         IReadOnlyList<WeatherModelAccuracy> accuracy)
@@ -11,6 +16,7 @@ public sealed class ForecastSelector(EnergyManagerOptions options)
             throw new ArgumentException("At least one forecast is required.", nameof(forecasts));
         }
 
+        var options = settingsProvider.Current;
         var eligible = accuracy
             .Where(item => item.SampleCount >= options.MinimumAccuracySamples)
             .OrderBy(item => item.MeanAbsoluteErrorCelsius)

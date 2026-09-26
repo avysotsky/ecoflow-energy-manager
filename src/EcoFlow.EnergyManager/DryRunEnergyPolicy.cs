@@ -1,12 +1,18 @@
 namespace EcoFlow.EnergyManager;
 
-public sealed class DryRunEnergyPolicy(EnergyManagerOptions options) : IEnergyPolicy
+public sealed class DryRunEnergyPolicy(IRuntimeSettingsProvider settingsProvider) : IEnergyPolicy
 {
+    public DryRunEnergyPolicy(EnergyManagerOptions options)
+        : this(new FixedRuntimeSettingsProvider(options))
+    {
+    }
+
     public EnergyDecision Evaluate(
         EcoFlowStatus status,
         SolarForecast forecast,
         DateTimeOffset nowUtc)
     {
+        var options = settingsProvider.Current;
         if (!status.Connected || !status.Authenticated)
         {
             return Blocked(nowUtc, "BLE status is not connected and authenticated.");
