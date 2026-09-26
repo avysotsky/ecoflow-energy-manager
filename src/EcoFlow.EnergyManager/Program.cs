@@ -10,7 +10,11 @@ if (string.IsNullOrWhiteSpace(settingsPath))
         "settings.json");
 }
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory,
+});
 builder.WebHost.UseUrls(
     Environment.GetEnvironmentVariable("ECOFLOW_WEB_URLS") ?? "http://127.0.0.1:5080");
 
