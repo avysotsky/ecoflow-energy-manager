@@ -6,7 +6,7 @@ const translations = {
   ru: {
     language: "Язык", localDashboard: "Локальная панель", loading: "Загрузка…",
     currentStatus: "Текущее состояние", noData: "Нет данных", battery: "Батарея",
-    input: "Вход", output: "Выход", balance: "Баланс", positiveMeansCharging: "«+» — заряд",
+    input: "Вход", solarInput: "Солнечный вход", output: "Выход", balance: "Баланс", positiveMeansCharging: "«+» — заряд",
     bleBridge: "BLE-мост", connection: "Соединение", authentication: "Авторизация",
     ports: "AC / 12 В", chargeLimits: "Лимиты заряда", readOnly: "только чтение",
     noDeviceControl: "Без управления устройством", calculationSettings: "Настройки расчёта",
@@ -38,7 +38,7 @@ const translations = {
   en: {
     language: "Language", localDashboard: "Local dashboard", loading: "Loading…",
     currentStatus: "Current status", noData: "No data", battery: "Battery",
-    input: "Input", output: "Output", balance: "Balance", positiveMeansCharging: "“+” means charging",
+    input: "Input", solarInput: "Solar input", output: "Output", balance: "Balance", positiveMeansCharging: "“+” means charging",
     bleBridge: "BLE bridge", connection: "Connection", authentication: "Authentication",
     ports: "AC / 12 V", chargeLimits: "Charge limits", readOnly: "read only",
     noDeviceControl: "No device control", calculationSettings: "Calculation settings",
@@ -70,7 +70,7 @@ const translations = {
   uk: {
     language: "Мова", localDashboard: "Локальна панель", loading: "Завантаження…",
     currentStatus: "Поточний стан", noData: "Немає даних", battery: "Батарея",
-    input: "Вхід", output: "Вихід", balance: "Баланс", positiveMeansCharging: "«+» — заряджання",
+    input: "Вхід", solarInput: "Сонячний вхід", output: "Вихід", balance: "Баланс", positiveMeansCharging: "«+» — заряджання",
     bleBridge: "BLE-міст", connection: "З’єднання", authentication: "Автентифікація",
     ports: "AC / 12 В", chargeLimits: "Межі заряду", readOnly: "лише читання",
     noDeviceControl: "Без керування пристроєм", calculationSettings: "Налаштування розрахунку",
@@ -145,6 +145,7 @@ function renderStatus(value) {
   byId("battery").textContent = formatNumber(value.batteryLevel, "%");
   byId("battery-bar").style.width = `${Math.max(0, Math.min(100, value.batteryLevel ?? 0))}%`;
   byId("input-power").textContent = formatNumber(value.inputPowerW, t("watt"));
+  byId("solar-input-power").textContent = formatNumber(value.solarInputPowerW, t("watt"));
   byId("output-power").textContent = formatNumber(value.outputPowerW, t("watt"));
   byId("net-power").textContent = value.netPowerW === null || value.netPowerW === undefined
     ? "—"

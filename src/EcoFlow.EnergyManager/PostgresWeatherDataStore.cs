@@ -2,7 +2,7 @@ using Npgsql;
 
 namespace EcoFlow.EnergyManager;
 
-public sealed class PostgresWeatherDataStore : IWeatherDataStore, IAsyncDisposable
+public sealed class PostgresWeatherDataStore : IWeatherDataStore, IPvDataStore, IAsyncDisposable
 {
     private readonly IRuntimeSettingsProvider _settingsProvider;
     private readonly NpgsqlDataSource _dataSource;
@@ -129,6 +129,34 @@ public sealed class PostgresWeatherDataStore : IWeatherDataStore, IAsyncDisposab
         command.Parameters.AddWithValue("source", observation.Source);
         command.Parameters.AddWithValue("sampled_utc", observation.ObservedUtc);
         command.Parameters.AddWithValue("air_temperature_c", observation.AirTemperatureCelsius);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task SavePvPowerObservationAsync(
+        PvPowerObservation observation,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var command = _dataSource.CreateCommand(
+            """
+            INSERT INTO solar_actual_samples
+                (sampled_utc, source, solar_input_power_w, xt60_1_input_power_w, xt60_2_input_power_w)
+            VALUES
+                (@sampled_utc, @source, @solar_power, @xt60_1, @xt60_2)
+            ON CONFLICT (sampled_utc, source) DO UPDATE SET
+                solar_input_power_w = EXCLUDED.solar_input_power_w,
+                xt60_1_input_power_w = EXCLUDED.xt60_1_input_power_w,
+                xt60_2_input_power_w = EXCLUDED.xt60_2_input_power_w;
+            """);
+        command.Parameters.AddWithValue("sampled_utc", observation.SampledUtc);
+        command.Parameters.AddWithValue("source", observation.Source);
+        command.Parameters.AddWithValue("solar_power", observation.SolarInputPowerW);
+        command.Parameters.AddWithValue(
+            "xt60_1",
+            observation.Xt60Input1PowerW is null ? DBNull.Value : observation.Xt60Input1PowerW);
+        command.Parameters.AddWithValue(
+            "xt60_2",
+            observation.Xt60Input2PowerW is null ? DBNull.Value : observation.Xt60Input2PowerW);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -308,6 +336,20 @@ public sealed class PostgresWeatherDataStore : IWeatherDataStore, IAsyncDisposab
 
                 CREATE INDEX IF NOT EXISTS ix_weather_model_accuracy_calculated
                     ON weather_model_accuracy_snapshots (calculated_utc DESC, rank);
+
+                CREATE TABLE IF NOT EXISTS solar_actual_samples
+                (
+                    sampled_utc timestamptz NOT NULL,
+                    source text NOT NULL,
+                    solar_input_power_w double precision NOT NULL CHECK (solar_input_power_w >= 0),
+                    xt60_1_input_power_w double precision,
+                    xt60_2_input_power_w double precision,
+                    created_utc timestamptz NOT NULL DEFAULT now(),
+                    PRIMARY KEY (sampled_utc, source)
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_solar_actual_samples_time
+                    ON solar_actual_samples (sampled_utc DESC);
                 """);
             await command.ExecuteNonQueryAsync(cancellationToken);
             _initialized = true;

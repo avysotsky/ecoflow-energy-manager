@@ -8,6 +8,7 @@ public sealed record DashboardStatus
     public double? BatteryLevel { get; init; }
     public double? InputPowerW { get; init; }
     public double? OutputPowerW { get; init; }
+    public double? SolarInputPowerW { get; init; }
     public double? NetPowerW { get; init; }
     public bool? AcPorts { get; init; }
     public bool? Dc12VPort { get; init; }
@@ -26,6 +27,7 @@ public sealed record DashboardStatus
         BatteryLevel = status.BatteryLevel,
         InputPowerW = status.InputPowerW,
         OutputPowerW = status.OutputPowerW,
+        SolarInputPowerW = status.SolarInputPowerW,
         NetPowerW = status.InputPowerW is not null && status.OutputPowerW is not null
             ? status.InputPowerW - status.OutputPowerW
             : null,

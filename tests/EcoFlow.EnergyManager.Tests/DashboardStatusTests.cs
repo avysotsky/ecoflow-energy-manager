@@ -16,6 +16,7 @@ public sealed class DashboardStatusTests
             Model = "sensitive-device-value",
             InputPowerW = 500,
             OutputPowerW = 125,
+            SolarInputPowerW = 300,
             LastError = "sensitive-error-value",
             SampledUtc = DateTimeOffset.UtcNow,
         }, stale: false);
@@ -23,6 +24,7 @@ public sealed class DashboardStatusTests
         var json = JsonSerializer.Serialize(result);
 
         Assert.Equal(375, result.NetPowerW);
+        Assert.Equal(300, result.SolarInputPowerW);
         Assert.DoesNotContain("sensitive-device-value", json, StringComparison.Ordinal);
         Assert.DoesNotContain("sensitive-error-value", json, StringComparison.Ordinal);
         Assert.True(result.Error);

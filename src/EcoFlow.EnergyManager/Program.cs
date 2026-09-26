@@ -46,13 +46,18 @@ builder.Services.AddSingleton<IActualWeatherProvider>(services =>
     new OpenMeteoActualWeatherProvider(
         services.GetRequiredService<IHttpClientFactory>().CreateClient("weather"),
         services.GetRequiredService<IRuntimeSettingsProvider>()));
-builder.Services.AddSingleton<IWeatherDataStore, PostgresWeatherDataStore>();
+builder.Services.AddSingleton<PostgresWeatherDataStore>();
+builder.Services.AddSingleton<IWeatherDataStore>(services =>
+    services.GetRequiredService<PostgresWeatherDataStore>());
+builder.Services.AddSingleton<IPvDataStore>(services =>
+    services.GetRequiredService<PostgresWeatherDataStore>());
 builder.Services.AddSingleton<SolarCalculator>();
 builder.Services.AddSingleton<ForecastSelector>();
 builder.Services.AddSingleton<IEnergyPolicy, DryRunEnergyPolicy>();
 builder.Services.AddSingleton(new DecisionAuditWriter(defaults.DecisionLogPath));
 builder.Services.AddSingleton<ForecastRunner>();
 builder.Services.AddSingleton<ActualWeatherCollector>();
+builder.Services.AddSingleton<PvActualCollector>();
 
 var runOnce = args.Contains("--once", StringComparer.OrdinalIgnoreCase);
 var collectActual = args.Contains("--collect-actual", StringComparer.OrdinalIgnoreCase);
@@ -60,6 +65,7 @@ if (!runOnce && !collectActual)
 {
     builder.Services.AddHostedService<ForecastWorker>();
     builder.Services.AddHostedService<ActualWeatherWorker>();
+    builder.Services.AddHostedService<PvActualWorker>();
 }
 
 await using var app = builder.Build();

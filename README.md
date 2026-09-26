@@ -10,6 +10,7 @@ recommendation.
 
 - reads BLE connection/authentication state;
 - reads battery level and input/output power;
+- reads both XT60 solar inputs and stores actual PV power every minute;
 - reads AC and 12 V output state;
 - reads configured charge limits;
 - obtains tomorrow's hourly GTI and air-temperature forecasts from Open-Meteo
@@ -106,6 +107,7 @@ The application creates and maintains these tables automatically:
 - `solar_generation_forecasts`;
 - `weather_actual_hourly`;
 - `weather_model_accuracy_snapshots`.
+- `solar_actual_samples`.
 
 The background service records current actual temperature at five minutes past every
 hour. The daily 23:00 run stores every available model forecast, recalculates model
@@ -153,6 +155,6 @@ application-data directory.
 
 1. Accumulate actual temperatures and validate the automatic model ranking.
 2. Add an independent local temperature sensor or station observation as the reference.
-3. Store actual PV production separately from other EcoFlow input power and use it to
-   train generation accuracy and system-loss calibration.
+3. Use the separately stored XT60 PV samples to calculate actual hourly/daily energy,
+   generation accuracy, and system-loss calibration.
 4. Add guarded charge-limit control with hard bounds and manual override.

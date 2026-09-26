@@ -25,6 +25,15 @@ public sealed record EcoFlowStatus
     [JsonPropertyName("output_power_w")]
     public double? OutputPowerW { get; init; }
 
+    [JsonPropertyName("xt60_1_input_power_w")]
+    public double? Xt60Input1PowerW { get; init; }
+
+    [JsonPropertyName("xt60_2_input_power_w")]
+    public double? Xt60Input2PowerW { get; init; }
+
+    [JsonPropertyName("solar_input_power_w")]
+    public double? SolarInputPowerW { get; init; }
+
     [JsonPropertyName("ac_ports")]
     public bool? AcPorts { get; init; }
 
