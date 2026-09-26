@@ -39,14 +39,14 @@ SDK if Visual Studio does not already include it.
 ```
 
 The default process starts the existing background workers and a dashboard at
-`http://127.0.0.1:5080`. Status is refreshed in the browser every two seconds. The web
+`http://127.0.0.1:5095`. Status is refreshed in the browser every two seconds. The web
 server binds only to localhost by default. The forecast Worker calculates the next-day
 forecast every day at 23:00 `Europe/Kyiv`.
 
 Override the listener only when the network exposure has been reviewed explicitly:
 
 ```text
-ECOFLOW_WEB_URLS=http://127.0.0.1:5080
+ECOFLOW_WEB_URLS=http://127.0.0.1:5095
 ```
 
 Run one calculation immediately with:

@@ -16,7 +16,7 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     ContentRootPath = AppContext.BaseDirectory,
 });
 builder.WebHost.UseUrls(
-    Environment.GetEnvironmentVariable("ECOFLOW_WEB_URLS") ?? "http://127.0.0.1:5080");
+    Environment.GetEnvironmentVariable("ECOFLOW_WEB_URLS") ?? "http://127.0.0.1:5095");
 
 builder.Services.AddSingleton<IRuntimeSettingsProvider>(
     new RuntimeSettingsProvider(defaults, settingsPath));
