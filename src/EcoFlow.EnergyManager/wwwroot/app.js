@@ -66,9 +66,42 @@ const translations = {
     watt: " W", bridgeConnected: "connected", bridgeAuthenticated: "authenticated",
     bridgeConnecting: "connecting", bridgeAuthenticating: "authenticating",
     bridgeDisconnected: "disconnected", bridgeErrorState: "error", bridgeUnavailable: "unavailable"
+  },
+  uk: {
+    language: "Мова", localDashboard: "Локальна панель", loading: "Завантаження…",
+    currentStatus: "Поточний стан", noData: "Немає даних", battery: "Батарея",
+    input: "Вхід", output: "Вихід", balance: "Баланс", positiveMeansCharging: "«+» — заряджання",
+    bleBridge: "BLE-міст", connection: "З’єднання", authentication: "Автентифікація",
+    ports: "AC / 12 В", chargeLimits: "Межі заряду", readOnly: "лише читання",
+    noDeviceControl: "Без керування пристроєм", calculationSettings: "Налаштування розрахунку",
+    settingsHint: "Зберігаються локально та застосовуються без перезапуску",
+    locationAndSchedule: "Місце та розклад", latitude: "Широта", longitude: "Довгота",
+    timeZone: "Часовий пояс IANA", forecastHour: "Година прогнозу",
+    solarInstallation: "Сонячна установка", nominalPower: "Номінальна потужність, кВт",
+    tilt: "Нахил, °", azimuth: "Азимут, °", efficiency: "Ефективність",
+    temperatureCoefficient: "Температурний коефіцієнт /°C", thresholdPolicy: "Порогова політика (рекомендації)",
+    moderateThreshold: "Середній поріг, кВт·год", highThreshold: "Високий поріг, кВт·год",
+    highGenerationLimit: "Межа за високої генерації, %",
+    moderateGenerationLimit: "Межа за середньої генерації, %",
+    lowGenerationLimit: "Межа за низької генерації, %", acceptableFreshness: "Допустима актуальність",
+    bleStatusMinutes: "Статус BLE, хвилин", forecastMinutes: "Прогноз, хвилин",
+    saveSettings: "Зберегти налаштування",
+    footer: "Межі заряду відображаються лише для читання. Керування пристроєм не реалізовано.",
+    on: "Увімкнено", off: "Вимкнено", yes: "Так", no: "Ні", measurement: "Виміряно",
+    noMeasurementTime: "Немає часу вимірювання", error: "Помилка", stale: "Дані застаріли",
+    current: "Дані актуальні", noConnection: "Немає зв’язку",
+    staleMessage: "Дані BLE-моста застаріли.", appUnavailable: "Вебзастосунок не відповідає.",
+    bridgeError: "Міст повідомив про помилку. Подробиці доступні лише в локальному журналі.",
+    bridgeUnavailableMessage: "Не вдалося отримати стан локального BLE-моста.",
+    fixFields: "Виправте позначені поля.", saving: "Збереження…", saved: "Збережено та застосовано.",
+    saveFailed: "Не вдалося зберегти налаштування.", loadFailed: "Не вдалося завантажити налаштування.",
+    watt: " Вт", bridgeConnected: "підключено", bridgeAuthenticated: "автентифіковано",
+    bridgeConnecting: "підключення", bridgeAuthenticating: "автентифікація",
+    bridgeDisconnected: "не підключено", bridgeErrorState: "помилка", bridgeUnavailable: "недоступний"
   }
 };
-let language = localStorage.getItem("ecoflow-language") === "en" ? "en" : "ru";
+const savedLanguage = localStorage.getItem("ecoflow-language");
+let language = Object.hasOwn(translations, savedLanguage) ? savedLanguage : "ru";
 let lastStatus = null;
 let statusRequestFailed = false;
 let settingsResultKey = null;
@@ -83,7 +116,8 @@ const numberFields = new Set([
 ]);
 
 function formatNumber(value, suffix = "") {
-  return value === null || value === undefined ? "—" : `${new Intl.NumberFormat(language === "ru" ? "ru-RU" : "en-US", { maximumFractionDigits: 1 }).format(value)}${suffix}`;
+  const locales = { ru: "ru-RU", uk: "uk-UA", en: "en-US" };
+  return value === null || value === undefined ? "—" : `${new Intl.NumberFormat(locales[language], { maximumFractionDigits: 1 }).format(value)}${suffix}`;
 }
 
 function formatSwitch(value) {
@@ -121,7 +155,7 @@ function renderStatus(value) {
   byId("ports").textContent = `${formatSwitch(value.acPorts)} / ${formatSwitch(value.dc12VPort)}`;
   byId("charge-limits").textContent = `${formatNumber(value.chargeLimitMin, "%")} — ${formatNumber(value.chargeLimitMax, "%")}`;
   byId("sampled").textContent = value.sampledUtc
-    ? `${t("measurement")}: ${new Date(value.sampledUtc).toLocaleString(language === "ru" ? "ru-RU" : "en-US")}`
+    ? `${t("measurement")}: ${new Date(value.sampledUtc).toLocaleString({ ru: "ru-RU", uk: "uk-UA", en: "en-US" }[language])}`
     : t("noMeasurementTime");
 
   const state = byId("overall-state");
@@ -148,7 +182,7 @@ function renderRequestFailure() {
 }
 
 function setLanguage(nextLanguage) {
-  language = nextLanguage === "en" ? "en" : "ru";
+  language = Object.hasOwn(translations, nextLanguage) ? nextLanguage : "ru";
   localStorage.setItem("ecoflow-language", language);
   document.documentElement.lang = language;
   document.querySelectorAll("[data-i18n]").forEach((element) => {

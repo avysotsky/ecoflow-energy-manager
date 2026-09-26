@@ -25,7 +25,7 @@ recommendation.
 - appends every decision to a local JSONL audit log;
 - uses no EcoFlow cloud connection during normal status reads.
 - never sends a control command to the device.
-- serves a responsive Russian/English dashboard with live status and safe runtime settings.
+- serves a responsive Russian/Ukrainian/English dashboard with live status and safe runtime settings.
 
 ## Open in Visual Studio
 
