@@ -46,6 +46,12 @@ public sealed record EcoFlowStatus
     [JsonPropertyName("charge_limit_max")]
     public double? ChargeLimitMax { get; init; }
 
+    [JsonPropertyName("backup_reserve_enabled")]
+    public bool? BackupReserveEnabled { get; init; }
+
+    [JsonPropertyName("backup_reserve")]
+    public double? BackupReserve { get; init; }
+
     [JsonPropertyName("sampled_utc")]
     public DateTimeOffset SampledUtc { get; init; }
 

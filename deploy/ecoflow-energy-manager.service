@@ -1,5 +1,5 @@
 [Unit]
-Description=EcoFlow Energy Manager dry-run solar forecast
+Description=EcoFlow Energy Manager solar forecast and guarded backup-reserve control
 After=network-online.target ecoflow-ble-bridge.service
 Wants=network-online.target
 

@@ -15,6 +15,7 @@ public sealed class DecisionAuditWriter(string path)
         EcoFlowStatus status,
         SolarForecast forecast,
         EnergyDecision decision,
+        BackupReserveControlOutcome control,
         CancellationToken cancellationToken = default)
     {
         var fullPath = Path.GetFullPath(path);
@@ -27,6 +28,7 @@ public sealed class DecisionAuditWriter(string path)
             Status = status,
             Forecast = forecast,
             Decision = decision,
+            Control = control,
         };
         var line = JsonSerializer.Serialize(record, JsonOptions) + Environment.NewLine;
         await File.AppendAllTextAsync(fullPath, line, cancellationToken);
@@ -37,5 +39,6 @@ public sealed class DecisionAuditWriter(string path)
         public required EcoFlowStatus Status { get; init; }
         public required SolarForecast Forecast { get; init; }
         public required EnergyDecision Decision { get; init; }
+        public required BackupReserveControlOutcome Control { get; init; }
     }
 }

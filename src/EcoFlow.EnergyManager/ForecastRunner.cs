@@ -7,14 +7,23 @@ public sealed class ForecastRunner(
     ForecastSelector forecastSelector,
     IWeatherDataStore weatherDataStore,
     IEnergyPolicy policy,
+    BackupReserveController backupReserveController,
     DecisionAuditWriter auditWriter,
-    IRuntimeSettingsProvider settingsProvider)
+    IRuntimeSettingsProvider settingsProvider,
+    IForecastNotifier notifier)
 {
     public async Task<int> RunAsync(CancellationToken cancellationToken)
     {
+        EcoFlowStatus? status = null;
+        ForecastSelection? selection = null;
+        SolarForecast? forecast = null;
+        EnergyDecision? decision = null;
+        BackupReserveControlOutcome? control = null;
+        var exitCode = 1;
+        string? failure = null;
         try
         {
-            var status = await gateway.GetStatusAsync(cancellationToken);
+            status = await gateway.GetStatusAsync(cancellationToken);
             var weatherForecasts = await weatherProvider.GetTomorrowForecastsAsync(cancellationToken);
             var modelForecasts = weatherForecasts.Select(item => new ModelSolarForecast
             {
@@ -25,18 +34,30 @@ public sealed class ForecastRunner(
 
             var accuracy = await weatherDataStore.GetModelAccuracyAsync(cancellationToken);
             await weatherDataStore.SaveAccuracySnapshotAsync(accuracy, cancellationToken);
-            var selection = forecastSelector.Select(weatherForecasts, accuracy);
-            var forecast = solarCalculator.Calculate(selection.Weather);
-            var decision = policy.Evaluate(status, forecast, DateTimeOffset.UtcNow);
+            selection = forecastSelector.Select(weatherForecasts, accuracy);
+            forecast = solarCalculator.Calculate(selection.Weather);
+            var nowUtc = DateTimeOffset.UtcNow;
+            decision = policy.Evaluate(status, forecast, nowUtc);
+            control = await backupReserveController.ApplyAsync(
+                decision,
+                status,
+                nowUtc,
+                cancellationToken);
 
             PrintStatus(status);
             PrintModels(modelForecasts, selection, accuracy);
             PrintForecast(forecast);
             PrintDecision(decision);
+            PrintControl(control);
 
-            await auditWriter.AppendAsync(status, forecast, decision, cancellationToken);
+            await auditWriter.AppendAsync(
+                status,
+                forecast,
+                decision,
+                control,
+                cancellationToken);
             Console.WriteLine($"Audit log:    {settingsProvider.Current.DecisionLogPath}");
-            return decision.IsActionable ? 0 : 2;
+            exitCode = control.State == "failed" ? 1 : control.IsSuccess ? 0 : 2;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -45,7 +66,48 @@ public sealed class ForecastRunner(
         catch (Exception error)
         {
             Console.Error.WriteLine($"EcoFlow forecast failed: {error.Message}");
-            return 1;
+            failure = $"Forecast or control failed ({error.GetType().Name}).";
+        }
+
+        var notification = new ForecastNotification
+        {
+            ForecastDate = forecast?.ForecastDate ?? GetTomorrowDate(),
+            SelectedModel = selection?.Source,
+            ExpectedGenerationKwh = forecast?.ExpectedGenerationKwh,
+            PreviousBackupReserve = status?.BackupReserve,
+            TargetBackupReserve = decision?.RecommendedBackupReserve,
+            ConfirmedBackupReserve = control?.IsSuccess is true
+                ? control.ReadbackBackupReserve
+                : null,
+            Success = exitCode == 0,
+            Outcome = failure ?? $"Control {control?.State ?? "failed"}: {control?.Reason ?? "no outcome"}",
+        };
+        var delivery = await NotifySafelyAsync(notification);
+        Console.WriteLine($"Telegram:     {delivery.State} — {delivery.Reason}");
+        return exitCode;
+    }
+
+    private DateOnly GetTomorrowDate()
+    {
+        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(settingsProvider.Current.TimeZone);
+        var localNow = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, timeZone);
+        return DateOnly.FromDateTime(localNow.Date.AddDays(1));
+    }
+
+    private async Task<NotificationDeliveryOutcome> NotifySafelyAsync(
+        ForecastNotification notification)
+    {
+        try
+        {
+            return await notifier.NotifyAsync(notification, CancellationToken.None);
+        }
+        catch (Exception error)
+        {
+            return new NotificationDeliveryOutcome
+            {
+                State = "failed",
+                Reason = $"Telegram notifier failed ({error.GetType().Name}).",
+            };
         }
     }
 
@@ -79,6 +141,7 @@ public sealed class ForecastRunner(
         Console.WriteLine($"AC ports:     {FormatSwitch(status.AcPorts)}");
         Console.WriteLine($"12V port:     {FormatSwitch(status.Dc12VPort)}");
         Console.WriteLine($"Charge range: {Format(status.ChargeLimitMin, "%")} - {Format(status.ChargeLimitMax, "%")}");
+        Console.WriteLine($"Backup reserve: {Format(status.BackupReserve, "%")} ({FormatSwitch(status.BackupReserveEnabled)})");
         Console.WriteLine($"Sampled UTC:  {status.SampledUtc:O}");
     }
 
@@ -100,11 +163,21 @@ public sealed class ForecastRunner(
     private static void PrintDecision(EnergyDecision decision)
     {
         Console.WriteLine();
-        Console.WriteLine("Mode:         DRY-RUN (no device commands)");
+        Console.WriteLine($"Mode:         {(decision.DryRun ? "DRY-RUN" : "ACTIVE CONTROL")}");
         Console.WriteLine($"Actionable:   {decision.IsActionable}");
         Console.WriteLine(
-            $"Recommendation: {(decision.RecommendedUpperChargeLimit is null ? "none" : $"upper charge limit {decision.RecommendedUpperChargeLimit}%")}");
+            $"Recommendation: {(decision.RecommendedBackupReserve is null ? "none" : $"backup reserve {decision.RecommendedBackupReserve}%")}");
         Console.WriteLine($"Reason:       {decision.Reason}");
+    }
+
+    private static void PrintControl(BackupReserveControlOutcome control)
+    {
+        Console.WriteLine($"Control:      {control.State}");
+        Console.WriteLine($"Control note: {control.Reason}");
+        if (control.ReadbackBackupReserve is not null)
+        {
+            Console.WriteLine($"Readback:     {control.ReadbackBackupReserve:0}%");
+        }
     }
 
     private static string Format(double? value, string unit) =>

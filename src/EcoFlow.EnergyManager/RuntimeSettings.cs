@@ -13,11 +13,6 @@ public sealed record RuntimeSettings
     public double SystemEfficiency { get; init; }
     public double TemperatureCoefficientPerCelsius { get; init; }
     public int ForecastRunHourLocal { get; init; }
-    public double ModerateExpectedGenerationKwh { get; init; }
-    public double HighExpectedGenerationKwh { get; init; }
-    public int HighSolarChargeLimit { get; init; }
-    public int ModerateSolarChargeLimit { get; init; }
-    public int LowSolarChargeLimit { get; init; }
     public double MaximumStatusAgeMinutes { get; init; }
     public double MaximumForecastAgeMinutes { get; init; }
 
@@ -32,11 +27,6 @@ public sealed record RuntimeSettings
         SystemEfficiency = options.SystemEfficiency,
         TemperatureCoefficientPerCelsius = options.TemperatureCoefficientPerCelsius,
         ForecastRunHourLocal = options.ForecastRunHourLocal,
-        ModerateExpectedGenerationKwh = options.ModerateExpectedGenerationKwh,
-        HighExpectedGenerationKwh = options.HighExpectedGenerationKwh,
-        HighSolarChargeLimit = options.HighSolarChargeLimit,
-        ModerateSolarChargeLimit = options.ModerateSolarChargeLimit,
-        LowSolarChargeLimit = options.LowSolarChargeLimit,
         MaximumStatusAgeMinutes = options.MaximumStatusAge.TotalMinutes,
         MaximumForecastAgeMinutes = options.MaximumForecastAge.TotalMinutes,
     };
@@ -52,11 +42,6 @@ public sealed record RuntimeSettings
         SystemEfficiency = SystemEfficiency,
         TemperatureCoefficientPerCelsius = TemperatureCoefficientPerCelsius,
         ForecastRunHourLocal = ForecastRunHourLocal,
-        ModerateExpectedGenerationKwh = ModerateExpectedGenerationKwh,
-        HighExpectedGenerationKwh = HighExpectedGenerationKwh,
-        HighSolarChargeLimit = HighSolarChargeLimit,
-        ModerateSolarChargeLimit = ModerateSolarChargeLimit,
-        LowSolarChargeLimit = LowSolarChargeLimit,
         MaximumStatusAge = TimeSpan.FromMinutes(MaximumStatusAgeMinutes),
         MaximumForecastAge = TimeSpan.FromMinutes(MaximumForecastAgeMinutes),
     };
@@ -72,11 +57,6 @@ public sealed record RuntimeSettings
         AddRangeError(errors, nameof(SystemEfficiency), SystemEfficiency, 0.1, 1);
         AddRangeError(errors, nameof(TemperatureCoefficientPerCelsius), TemperatureCoefficientPerCelsius, -0.02, 0);
         AddRangeError(errors, nameof(ForecastRunHourLocal), ForecastRunHourLocal, 0, 23);
-        AddRangeError(errors, nameof(ModerateExpectedGenerationKwh), ModerateExpectedGenerationKwh, 0, 1000);
-        AddRangeError(errors, nameof(HighExpectedGenerationKwh), HighExpectedGenerationKwh, 0, 1000);
-        AddRangeError(errors, nameof(HighSolarChargeLimit), HighSolarChargeLimit, 50, 100);
-        AddRangeError(errors, nameof(ModerateSolarChargeLimit), ModerateSolarChargeLimit, 50, 100);
-        AddRangeError(errors, nameof(LowSolarChargeLimit), LowSolarChargeLimit, 50, 100);
         AddRangeError(errors, nameof(MaximumStatusAgeMinutes), MaximumStatusAgeMinutes, 0.1, 60);
         AddRangeError(errors, nameof(MaximumForecastAgeMinutes), MaximumForecastAgeMinutes, 1, 1440);
 
@@ -98,19 +78,6 @@ public sealed record RuntimeSettings
             {
                 errors[nameof(TimeZone)] = ["Некорректный часовой пояс."];
             }
-        }
-
-        if (HighExpectedGenerationKwh <= ModerateExpectedGenerationKwh)
-        {
-            errors[nameof(HighExpectedGenerationKwh)] =
-                ["Высокий порог генерации должен быть больше среднего."];
-        }
-
-        if (HighSolarChargeLimit > ModerateSolarChargeLimit ||
-            ModerateSolarChargeLimit > LowSolarChargeLimit)
-        {
-            errors[nameof(HighSolarChargeLimit)] =
-                ["Лимиты должны не убывать от высокой к низкой солнечной генерации."];
         }
 
         return errors;

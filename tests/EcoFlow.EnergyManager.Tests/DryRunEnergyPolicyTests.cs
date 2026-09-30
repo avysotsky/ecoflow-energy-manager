@@ -5,23 +5,22 @@ namespace EcoFlow.EnergyManager.Tests;
 public sealed class DryRunEnergyPolicyTests
 {
     private static readonly DateTimeOffset Now = new(
-        2026,
-        9,
-        26,
-        10,
-        0,
-        0,
-        TimeSpan.Zero);
+        2026, 9, 26, 10, 0, 0, TimeSpan.Zero);
 
     [Theory]
-    [InlineData(3.5, 70)]
-    [InlineData(3.0, 70)]
-    [InlineData(2.0, 85)]
-    [InlineData(1.5, 85)]
+    [InlineData(0.5, 100)]
     [InlineData(1.0, 100)]
-    public void Evaluate_MapsExpectedGenerationToExpectedLimit(
+    [InlineData(1.46875, 93)]
+    [InlineData(1.5, 92)]
+    [InlineData(2.0, 84)]
+    [InlineData(3.5, 60)]
+    [InlineData(4.73, 40)]
+    [InlineData(5.5, 28)]
+    [InlineData(6.0, 20)]
+    [InlineData(7.0, 20)]
+    public void Evaluate_MapsExpectedGenerationToLinearBackupReserve(
         double expectedGenerationKwh,
-        int expectedLimit)
+        int expectedReserve)
     {
         var decision = CreatePolicy().Evaluate(
             CreateStatus(Now.AddSeconds(-10)),
@@ -30,7 +29,7 @@ public sealed class DryRunEnergyPolicyTests
 
         Assert.True(decision.DryRun);
         Assert.True(decision.IsActionable);
-        Assert.Equal(expectedLimit, decision.RecommendedUpperChargeLimit);
+        Assert.Equal(expectedReserve, decision.RecommendedBackupReserve);
     }
 
     [Fact]
@@ -42,7 +41,7 @@ public sealed class DryRunEnergyPolicyTests
             Now);
 
         Assert.False(decision.IsActionable);
-        Assert.Null(decision.RecommendedUpperChargeLimit);
+        Assert.Null(decision.RecommendedBackupReserve);
         Assert.Contains("BLE status is stale", decision.Reason);
     }
 
@@ -55,7 +54,7 @@ public sealed class DryRunEnergyPolicyTests
             Now);
 
         Assert.False(decision.IsActionable);
-        Assert.Null(decision.RecommendedUpperChargeLimit);
+        Assert.Null(decision.RecommendedBackupReserve);
         Assert.Contains("Weather forecast is stale", decision.Reason);
     }
 
@@ -70,7 +69,7 @@ public sealed class DryRunEnergyPolicyTests
             Now);
 
         Assert.False(decision.IsActionable);
-        Assert.Null(decision.RecommendedUpperChargeLimit);
+        Assert.Null(decision.RecommendedBackupReserve);
         Assert.Contains("not connected and authenticated", decision.Reason);
     }
 
@@ -82,18 +81,20 @@ public sealed class DryRunEnergyPolicyTests
         Authenticated = true,
         BatteryLevel = 80,
         ChargeLimitMax = 100,
+        BackupReserveEnabled = true,
+        BackupReserve = 50,
         SampledUtc = sampledUtc,
     };
 
     private static SolarForecast CreateForecast(
         DateTimeOffset fetchedUtc,
         double expectedGenerationKwh) => new()
-    {
-        ForecastDate = new DateOnly(2026, 9, 27),
-        FetchedUtc = fetchedUtc,
-        ExpectedGenerationKwh = expectedGenerationKwh,
-        TotalTiltedIrradiationKwhM2 = 4,
-        HourlySamples = 24,
-        Hours = [],
-    };
+        {
+            ForecastDate = new DateOnly(2026, 9, 27),
+            FetchedUtc = fetchedUtc,
+            ExpectedGenerationKwh = expectedGenerationKwh,
+            TotalTiltedIrradiationKwhM2 = 4,
+            HourlySamples = 24,
+            Hours = [],
+        };
 }

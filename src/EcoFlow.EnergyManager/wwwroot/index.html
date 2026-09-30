@@ -49,6 +49,7 @@
         <article class="card"><span data-i18n="connection">Соединение</span><strong id="connected">—</strong></article>
         <article class="card"><span data-i18n="authentication">Авторизация</span><strong id="authenticated">—</strong></article>
         <article class="card"><span data-i18n="ports">AC / 12 В</span><strong id="ports">—</strong></article>
+        <article class="card"><span data-i18n="backupReserve">Резерв питания</span><strong id="backup-reserve">—</strong><small data-i18n="automaticControl">автоматическое управление</small></article>
         <article class="card"><span data-i18n="chargeLimits">Лимиты заряда</span><strong id="charge-limits">—</strong><small data-i18n="readOnly">только чтение</small></article>
       </div>
     </section>
@@ -56,7 +57,7 @@
     <section class="settings-section" aria-labelledby="settings-title">
       <div class="section-heading">
         <div>
-          <p class="eyebrow" data-i18n="noDeviceControl">Без управления устройством</p>
+          <p class="eyebrow" data-i18n="safeAutomaticControl">Безопасное автоматическое управление</p>
           <h2 id="settings-title" data-i18n="calculationSettings">Настройки расчёта</h2>
         </div>
         <p class="muted" data-i18n="settingsHint">Сохраняются локально и применяются без перезапуска</p>
@@ -85,14 +86,8 @@
         </fieldset>
 
         <fieldset>
-          <legend data-i18n="thresholdPolicy">Пороговая политика (рекомендации)</legend>
-          <div class="form-grid">
-            <label><span data-i18n="moderateThreshold">Средний порог, кВт·ч</span><input name="moderateExpectedGenerationKwh" type="number" min="0" max="1000" step="0.1" required><small data-error="moderateExpectedGenerationKwh"></small></label>
-            <label><span data-i18n="highThreshold">Высокий порог, кВт·ч</span><input name="highExpectedGenerationKwh" type="number" min="0" max="1000" step="0.1" required><small data-error="highExpectedGenerationKwh"></small></label>
-            <label><span data-i18n="highGenerationLimit">Лимит при высокой генерации, %</span><input name="highSolarChargeLimit" type="number" min="50" max="100" step="1" required><small data-error="highSolarChargeLimit"></small></label>
-            <label><span data-i18n="moderateGenerationLimit">Лимит при средней генерации, %</span><input name="moderateSolarChargeLimit" type="number" min="50" max="100" step="1" required><small data-error="moderateSolarChargeLimit"></small></label>
-            <label><span data-i18n="lowGenerationLimit">Лимит при низкой генерации, %</span><input name="lowSolarChargeLimit" type="number" min="50" max="100" step="1" required><small data-error="lowSolarChargeLimit"></small></label>
-          </div>
+          <legend data-i18n="linearPolicy">Линейная политика резерва</legend>
+          <p class="muted" data-i18n="linearPolicyDescription">≤1 кВт·ч → 100%; ≥6 кВт·ч → 20%; между ними: 116 − 16 × кВт·ч.</p>
         </fieldset>
 
         <fieldset>
@@ -111,6 +106,6 @@
     </section>
   </main>
 
-  <footer data-i18n="footer">Лимиты заряда отображаются только для чтения. Управление устройством не реализовано.</footer>
+  <footer data-i18n="footer">Автоматизация управляет только резервом питания. Лимиты заряда и выходы остаются без изменений.</footer>
 </body>
 </html>

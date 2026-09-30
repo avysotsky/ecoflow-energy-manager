@@ -10,17 +10,13 @@ public sealed class RuntimeSettingsTests
         var settings = RuntimeSettings.FromOptions(new EnergyManagerOptions()) with
         {
             Latitude = 91,
-            HighExpectedGenerationKwh = 1,
-            ModerateExpectedGenerationKwh = 2,
-            HighSolarChargeLimit = 90,
-            ModerateSolarChargeLimit = 80,
+            SystemEfficiency = 2,
         };
 
         var errors = settings.Validate();
 
         Assert.Contains(nameof(RuntimeSettings.Latitude), errors.Keys);
-        Assert.Contains(nameof(RuntimeSettings.HighExpectedGenerationKwh), errors.Keys);
-        Assert.Contains(nameof(RuntimeSettings.HighSolarChargeLimit), errors.Keys);
+        Assert.Contains(nameof(RuntimeSettings.SystemEfficiency), errors.Keys);
     }
 
     [Fact]

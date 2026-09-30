@@ -25,15 +25,24 @@ public sealed record EnergyManagerOptions
     public string PostgresConnectionString { get; init; } = string.Empty;
     public TimeSpan MaximumStatusAge { get; init; } = TimeSpan.FromMinutes(2);
     public TimeSpan MaximumForecastAge { get; init; } = TimeSpan.FromHours(1);
-    public double ModerateExpectedGenerationKwh { get; init; } = 1.5;
-    public double HighExpectedGenerationKwh { get; init; } = 3.0;
-    public int HighSolarChargeLimit { get; init; } = 70;
-    public int ModerateSolarChargeLimit { get; init; } = 85;
-    public int LowSolarChargeLimit { get; init; } = 100;
+    public bool ControlEnabled { get; init; }
+    public int MinimumAllowedBackupReserve { get; init; } = 20;
+    public int MaximumAllowedBackupReserve { get; init; } = 100;
+    public TimeSpan MinimumControlInterval { get; init; } = TimeSpan.FromHours(1);
+    public string ManualOverrideFile { get; init; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "ecoflow-energy-manager",
+        "manual-override");
+    public string ControlStatePath { get; init; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "ecoflow-energy-manager",
+        "control-state.json");
     public string DecisionLogPath { get; init; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "ecoflow-energy-manager",
         "decisions.jsonl");
+    public string TelegramNotificationCommand { get; init; } = string.Empty;
+    public TimeSpan TelegramNotificationTimeout { get; init; } = TimeSpan.FromSeconds(120);
 
     public static EnergyManagerOptions FromEnvironment() => new EnergyManagerOptions
     {
@@ -57,34 +66,43 @@ public sealed record EnergyManagerOptions
             ReadDouble("ECOFLOW_MAX_STATUS_AGE_MINUTES", 2, 0.1, 60)),
         MaximumForecastAge = TimeSpan.FromMinutes(
             ReadDouble("ECOFLOW_MAX_FORECAST_AGE_MINUTES", 60, 1, 1440)),
-        ModerateExpectedGenerationKwh = ReadDouble(
-            "ECOFLOW_MODERATE_GENERATION_KWH", 1.5, 0, 1000),
-        HighExpectedGenerationKwh = ReadDouble(
-            "ECOFLOW_HIGH_GENERATION_KWH", 3.0, 0, 1000),
-        HighSolarChargeLimit = ReadInt("ECOFLOW_HIGH_SOLAR_LIMIT", 70, 50, 100),
-        ModerateSolarChargeLimit = ReadInt("ECOFLOW_MODERATE_SOLAR_LIMIT", 85, 50, 100),
-        LowSolarChargeLimit = ReadInt("ECOFLOW_LOW_SOLAR_LIMIT", 100, 50, 100),
+        ControlEnabled = ReadBool("ECOFLOW_CONTROL_ENABLED", false),
+        MinimumAllowedBackupReserve = ReadInt(
+            "ECOFLOW_CONTROL_MIN_BACKUP_RESERVE", 20, 20, 100),
+        MaximumAllowedBackupReserve = ReadInt(
+            "ECOFLOW_CONTROL_MAX_BACKUP_RESERVE", 100, 20, 100),
+        MinimumControlInterval = TimeSpan.FromMinutes(
+            ReadDouble("ECOFLOW_CONTROL_MIN_INTERVAL_MINUTES", 60, 1, 1440)),
+        ManualOverrideFile = ReadString(
+            "ECOFLOW_MANUAL_OVERRIDE_FILE",
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "ecoflow-energy-manager",
+                "manual-override")),
+        ControlStatePath = ReadString(
+            "ECOFLOW_CONTROL_STATE_PATH",
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "ecoflow-energy-manager",
+                "control-state.json")),
         DecisionLogPath = ReadString(
             "ECOFLOW_DECISION_LOG",
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "ecoflow-energy-manager",
                 "decisions.jsonl")),
+        TelegramNotificationCommand = ReadString("ECOFLOW_TELEGRAM_COMMAND", string.Empty),
+        TelegramNotificationTimeout = TimeSpan.FromSeconds(
+            ReadDouble("ECOFLOW_TELEGRAM_TIMEOUT_SECONDS", 120, 5, 300)),
     }.Validate();
 
     public EnergyManagerOptions Validate()
     {
-        if (HighExpectedGenerationKwh <= ModerateExpectedGenerationKwh)
+        if (MinimumAllowedBackupReserve > MaximumAllowedBackupReserve)
         {
             throw new InvalidOperationException(
-                "ECOFLOW_HIGH_GENERATION_KWH must be greater than ECOFLOW_MODERATE_GENERATION_KWH.");
-        }
-
-        if (HighSolarChargeLimit > ModerateSolarChargeLimit ||
-            ModerateSolarChargeLimit > LowSolarChargeLimit)
-        {
-            throw new InvalidOperationException(
-                "Charge limits must increase from high-solar to low-solar conditions.");
+                "ECOFLOW_CONTROL_MIN_BACKUP_RESERVE must not exceed " +
+                "ECOFLOW_CONTROL_MAX_BACKUP_RESERVE.");
         }
 
         _ = TimeZoneInfo.FindSystemTimeZoneById(TimeZone);
@@ -158,5 +176,18 @@ public sealed record EnergyManagerOptions
         }
 
         return value;
+    }
+
+    private static bool ReadBool(string name, bool fallback)
+    {
+        var text = Environment.GetEnvironmentVariable(name);
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return fallback;
+        }
+
+        return bool.TryParse(text, out var value)
+            ? value
+            : throw new InvalidOperationException($"{name} must be true or false.");
     }
 }

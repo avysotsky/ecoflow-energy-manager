@@ -15,7 +15,10 @@ public sealed class DryRunEnergyPolicy(IRuntimeSettingsProvider settingsProvider
         var options = settingsProvider.Current;
         if (!status.Connected || !status.Authenticated)
         {
-            return Blocked(nowUtc, "BLE status is not connected and authenticated.");
+            return Blocked(
+                nowUtc,
+                options.ControlEnabled,
+                "BLE status is not connected and authenticated.");
         }
 
         var statusAge = nowUtc - status.SampledUtc;
@@ -25,6 +28,7 @@ public sealed class DryRunEnergyPolicy(IRuntimeSettingsProvider settingsProvider
         {
             return Blocked(
                 nowUtc,
+                options.ControlEnabled,
                 $"BLE status is stale (age {FormatAge(statusAge)}; maximum {FormatAge(options.MaximumStatusAge)}).");
         }
 
@@ -35,45 +39,62 @@ public sealed class DryRunEnergyPolicy(IRuntimeSettingsProvider settingsProvider
         {
             return Blocked(
                 nowUtc,
+                options.ControlEnabled,
                 $"Weather forecast is stale (age {FormatAge(forecastAge)}; maximum {FormatAge(options.MaximumForecastAge)}).");
         }
 
         if (forecast.HourlySamples < 20)
         {
-            return Blocked(nowUtc, "Weather forecast has insufficient hourly coverage.");
+            return Blocked(
+                nowUtc,
+                options.ControlEnabled,
+                "Weather forecast has insufficient hourly coverage.");
         }
 
-        var recommendedLimit = forecast.ExpectedGenerationKwh >= options.HighExpectedGenerationKwh
-            ? options.HighSolarChargeLimit
-            : forecast.ExpectedGenerationKwh >= options.ModerateExpectedGenerationKwh
-                ? options.ModerateSolarChargeLimit
-                : options.LowSolarChargeLimit;
-
-        var currentLimit = status.ChargeLimitMax is null
+        var recommendedReserve = CalculateBackupReserve(forecast.ExpectedGenerationKwh);
+        var currentReserve = status.BackupReserve is null
             ? "unknown"
-            : $"{status.ChargeLimitMax:0}%";
+            : $"{status.BackupReserve:0}%";
 
         return new EnergyDecision
         {
             DecidedUtc = nowUtc,
-            DryRun = true,
+            DryRun = !options.ControlEnabled,
             IsActionable = true,
-            RecommendedUpperChargeLimit = recommendedLimit,
+            RecommendedBackupReserve = recommendedReserve,
             Reason =
                 $"Tomorrow expected PV generation {forecast.ExpectedGenerationKwh:0.00} kWh " +
                 $"from {forecast.TotalTiltedIrradiationKwhM2:0.00} kWh/m² GTI; " +
-                $"current upper limit {currentLimit}.",
+                $"current backup reserve {currentReserve}.",
         };
     }
 
-    private static EnergyDecision Blocked(DateTimeOffset nowUtc, string reason) => new()
+    private static EnergyDecision Blocked(
+        DateTimeOffset nowUtc,
+        bool controlEnabled,
+        string reason) => new()
+        {
+            DecidedUtc = nowUtc,
+            DryRun = !controlEnabled,
+            IsActionable = false,
+            RecommendedBackupReserve = null,
+            Reason = reason,
+        };
+
+    public static int CalculateBackupReserve(double expectedGenerationKwh)
     {
-        DecidedUtc = nowUtc,
-        DryRun = true,
-        IsActionable = false,
-        RecommendedUpperChargeLimit = null,
-        Reason = reason,
-    };
+        if (expectedGenerationKwh <= 1.0)
+        {
+            return 100;
+        }
+        if (expectedGenerationKwh >= 6.0)
+        {
+            return 20;
+        }
+        return (int)Math.Round(
+            116 - 16 * expectedGenerationKwh,
+            MidpointRounding.AwayFromZero);
+    }
 
     private static string FormatAge(TimeSpan age) =>
         age < TimeSpan.Zero ? "future timestamp" : $"{age.TotalSeconds:0}s";

@@ -14,6 +14,8 @@ public sealed record DashboardStatus
     public bool? Dc12VPort { get; init; }
     public double? ChargeLimitMin { get; init; }
     public double? ChargeLimitMax { get; init; }
+    public bool? BackupReserveEnabled { get; init; }
+    public double? BackupReserve { get; init; }
     public DateTimeOffset? SampledUtc { get; init; }
     public bool Stale { get; init; }
     public bool Error { get; init; }
@@ -35,6 +37,8 @@ public sealed record DashboardStatus
         Dc12VPort = status.Dc12VPort,
         ChargeLimitMin = status.ChargeLimitMin,
         ChargeLimitMax = status.ChargeLimitMax,
+        BackupReserveEnabled = status.BackupReserveEnabled,
+        BackupReserve = status.BackupReserve,
         SampledUtc = status.SampledUtc == default ? null : status.SampledUtc,
         Stale = stale,
         Error = !string.IsNullOrWhiteSpace(status.LastError),

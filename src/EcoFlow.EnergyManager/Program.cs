@@ -26,7 +26,7 @@ builder.Services.AddHttpClient("bridge", client =>
     client.BaseAddress = new Uri(
         Environment.GetEnvironmentVariable("ECOFLOW_BRIDGE_URL") ??
         "http://127.0.0.1:8765");
-    client.Timeout = TimeSpan.FromSeconds(10);
+    client.Timeout = TimeSpan.FromSeconds(15);
 });
 builder.Services.AddHttpClient("weather", client =>
 {
@@ -54,7 +54,14 @@ builder.Services.AddSingleton<IPvDataStore>(services =>
 builder.Services.AddSingleton<SolarCalculator>();
 builder.Services.AddSingleton<ForecastSelector>();
 builder.Services.AddSingleton<IEnergyPolicy, DryRunEnergyPolicy>();
+builder.Services.AddSingleton<IBackupReserveControlStateStore>(services =>
+    new FileBackupReserveControlStateStore(
+        services.GetRequiredService<IRuntimeSettingsProvider>().Current.ControlStatePath));
+builder.Services.AddSingleton<BackupReserveController>();
 builder.Services.AddSingleton(new DecisionAuditWriter(defaults.DecisionLogPath));
+builder.Services.AddSingleton<IForecastNotifier>(new TelegramCommandForecastNotifier(
+    defaults.TelegramNotificationCommand,
+    defaults.TelegramNotificationTimeout));
 builder.Services.AddSingleton<ForecastRunner>();
 builder.Services.AddSingleton<ActualWeatherCollector>();
 builder.Services.AddSingleton<PvActualCollector>();

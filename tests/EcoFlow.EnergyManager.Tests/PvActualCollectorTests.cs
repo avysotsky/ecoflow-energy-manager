@@ -64,6 +64,11 @@ public sealed class PvActualCollectorTests
     {
         public Task<EcoFlowStatus> GetStatusAsync(
             CancellationToken cancellationToken = default) => Task.FromResult(status);
+
+        public Task<BackupReserveWriteResult> SetBackupReserveAsync(
+            int backupReserve,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class RecordingPvDataStore : IPvDataStore
