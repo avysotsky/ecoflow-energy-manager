@@ -1,38 +1,38 @@
 # EcoFlow.EnergyManager
 
-Локальная система прогноза солнечной генерации и безопасного управления **Backup Reserve**
-для EcoFlow DELTA 2 Max. Основная бизнес-логика реализована на .NET 8; доступ к станции
-выполняется локально по Bluetooth LE через отдельный Python-адаптер. EcoFlow Cloud не
-используется для штатного чтения статуса и управления.
+A local system for forecasting solar generation and safely managing **Backup Reserve**
+for the EcoFlow DELTA 2 Max. The core business logic is implemented in .NET 8; the
+power station is accessed locally over Bluetooth LE through a separate Python adapter.
+EcoFlow Cloud is not used for normal status reads or control.
 
-## Возможности
+## Features
 
-- получает почасовой прогноз на завтра из keyless Open-Meteo по моделям ECMWF, ICON,
-  GFS и AIFS;
-- рассчитывает ожидаемую генерацию массива солнечных панелей с поправкой на температуру;
-- сохраняет исходные прогнозы, расчёт генерации, фактическую температуру, метрики
-  качества моделей и фактическую мощность XT60 в PostgreSQL;
-- выбирает модель по MAE/RMSE за скользящее окно, а при недостаточной истории использует
-  равновесный ансамбль;
-- рассчитывает и, если управление разрешено, применяет Backup Reserve по линейной политике;
-- проверяет BLE-аутентификацию, свежесть данных, границы, persistent rate limit,
-  manual override, идемпотентность и независимый readback;
-- пишет решения и результаты управления в локальный JSONL-аудит;
-- показывает обезличенный статус в локальном dashboard на русском, украинском и английском;
-- каждую минуту сохраняет фактическую входную мощность двух XT60;
-- отправляет итог каждого штатного и ручного прогноза в Telegram, включая частично
-  доступные данные при ошибке.
+- fetches an hourly forecast for tomorrow from the keyless Open-Meteo API using the
+  ECMWF, ICON, GFS, and AIFS models;
+- calculates expected solar array generation with a temperature adjustment;
+- stores source forecasts, generation calculations, actual temperature, model quality
+  metrics, and actual XT60 power in PostgreSQL;
+- selects a model by MAE/RMSE over a rolling window and uses an equal-weight ensemble
+  when there is insufficient history;
+- calculates and, when control is enabled, applies Backup Reserve using a linear policy;
+- verifies BLE authentication, data freshness, bounds, the persistent rate limit,
+  manual override, idempotency, and independent readback;
+- writes decisions and control outcomes to a local JSONL audit log;
+- displays sanitized status in a local dashboard in Russian, Ukrainian, and English;
+- stores the actual input power of both XT60 ports every minute;
+- sends the outcome of every scheduled and manual forecast run to Telegram, including
+  partially available data when an error occurs.
 
-## Архитектура
+## Architecture
 
 ```text
-Open-Meteo (keyless HTTPS: GTI + температура)
+Open-Meteo (keyless HTTPS: GTI + temperature)
              |
              v
 EcoFlow.EnergyManager (.NET 8 / ASP.NET Core / BackgroundService)
-  |          |--> PostgreSQL: прогнозы, MAE/RMSE, XT60 actuals
+  |          |--> PostgreSQL: forecasts, MAE/RMSE, XT60 actuals
   |          |--> SolarCalculator -> policy -> guards -> audit
-  |          '--> локальный Telegram sender
+  |          '--> local Telegram sender
   |
   '-- HTTP http://127.0.0.1:8765
              |
@@ -43,65 +43,65 @@ ecoflow-local (Python 3 / ha-ef-ble / BlueZ)
 Bluetooth LE -> EcoFlow DELTA 2 Max
 ```
 
-Dashboard и его API по умолчанию слушают только `http://127.0.0.1:5095`. BLE bridge
-слушает только `http://127.0.0.1:8765`.
+The dashboard and its API listen only on `http://127.0.0.1:5095` by default. The BLE
+bridge listens only on `http://127.0.0.1:8765`.
 
-> **Важно:** исходники bridge не входят в этот Git-репозиторий. Это отдельный локальный
-> инфраструктурный адаптер `projects/ecoflow-local`, развёрнутый на Linux-хосте рядом
-> с приложением. Репозиторий содержит только .NET-клиент его подтверждённого API и тесты
-> контракта.
+> **Important:** the bridge source code is not included in this Git repository. It is a
+> separate local infrastructure adapter, `projects/ecoflow-local`, deployed on the Linux
+> host alongside the application. This repository contains only the .NET client for its
+> verified API and contract tests.
 
-## Режимы запуска
+## Run modes
 
-### Штатный режим
+### Normal mode
 
-Сервис постоянно запускает три фоновые задачи:
+The service continuously runs three background tasks:
 
-- прогноз и расчёт на следующий день — ежедневно в **23:00 Europe/Kyiv**;
-- сбор фактической температуры Open-Meteo Best Match — при старте и на 5-й минуте
-  каждого часа;
-- сбор фактической мощности XT60 — раз в минуту.
+- forecast and calculation for the next day — daily at **23:00 Europe/Kyiv**;
+- collection of the actual Open-Meteo Best Match temperature — at startup and at the
+  5th minute of every hour;
+- collection of actual XT60 power — once per minute.
 
-Час прогноза и IANA timezone настраиваются. Переходы на летнее/зимнее время рассчитываются
-через системную базу временных зон.
+The forecast hour and IANA time zone are configurable. Daylight-saving time transitions
+are calculated using the system time-zone database.
 
-### Ручной one-shot
+### Manual one-shot
 
 ```bash
 dotnet run --project src/EcoFlow.EnergyManager -- --once
 ```
 
-`--once` выполняет тот же прогноз, выбор модели, расчёт, guarded control, аудит и
-Telegram outcome, после чего завершает процесс. Ручной запуск **не отключает** persistent
-rate limit автоматически. Для санкционированного внепланового запуска допустимо временно
-передать безопасные environment overrides процессу, не меняя постоянную конфигурацию.
+`--once` performs the same forecast, model selection, calculation, guarded control,
+audit, and Telegram outcome, then exits. A manual run does **not** automatically disable
+the persistent rate limit. For an authorized unscheduled run, safe environment overrides
+may be passed temporarily to the process without changing the persistent configuration.
 
-Отдельный однократный сбор фактической температуры:
+Separate one-time collection of the actual temperature:
 
 ```bash
 dotnet run --project src/EcoFlow.EnergyManager -- --collect-actual
 ```
 
-## Прогноз инсоляции и выбор модели
+## Solar irradiance forecast and model selection
 
-Приложение вызывает keyless Open-Meteo Forecast API с координатами, углом наклона и
-азимутом массива и получает на завтра:
+The application calls the keyless Open-Meteo Forecast API with the array coordinates,
+tilt, and azimuth and retrieves the following for tomorrow:
 
-- `global_tilted_irradiance` (GTI), Вт/м²;
+- `global_tilted_irradiance` (GTI), W/m²;
 - `temperature_2m`, °C;
-- отдельные ряды моделей `ecmwf_ifs025`, `icon_seamless`, `gfs_seamless`,
-  `ecmwf_aifs025_single`.
+- separate series from the `ecmwf_ifs025`, `icon_seamless`, `gfs_seamless`, and
+  `ecmwf_aifs025_single` models.
 
-Для каждой модели сохраняются почасовые значения и итоговая генерация. Фактическая
-температура Open-Meteo Best Match сопоставляется с ранее сохранёнными прогнозами.
-За последние 60 дней вычисляются MAE и RMSE. Модель допускается к автоматическому выбору
-после 24 сопоставленных наблюдений; выигрывает минимальная MAE, затем минимальная RMSE.
-До накопления достаточной истории используется равновесное среднее всех полных моделей.
-Полным считается прогноз минимум с 20 почасовыми значениями.
+Hourly values and total generation are stored for each model. The actual Open-Meteo Best
+Match temperature is matched against previously stored forecasts. MAE and RMSE are
+calculated over the last 60 days. A model becomes eligible for automatic selection after
+24 matched observations; the lowest MAE wins, followed by the lowest RMSE. Until enough
+history has accumulated, an equal-weight average of all complete models is used. A
+forecast with at least 20 hourly values is considered complete.
 
-### Расчёт генерации
+### Generation calculation
 
-Для каждого часа:
+For each hour:
 
 ```text
 T_panel = T_air + GTI * 0.03
@@ -109,32 +109,32 @@ K_temp  = clamp(1 + K_coefficient * (T_panel - 25), 0.5, 1.1)
 E_hour  = P_nominal * (GTI / 1000) * K_temp * system_efficiency
 ```
 
-Где:
+Where:
 
-- `T_air` — температура воздуха, °C;
-- `T_panel` — оценка температуры панели, °C;
-- `GTI` — инсоляция на наклонную поверхность, Вт/м²;
-- `K_coefficient` — температурный коэффициент, по умолчанию `-0.004/°C`;
-- `P_nominal` — номинальная мощность, по умолчанию `1.0 kW`;
-- `system_efficiency` — суммарная эффективность системы, по умолчанию `0.85`;
-- `E_hour` — энергия за час, кВт·ч.
+- `T_air` — air temperature, °C;
+- `T_panel` — estimated panel temperature, °C;
+- `GTI` — irradiance on the tilted surface, W/m²;
+- `K_coefficient` — temperature coefficient, `-0.004/°C` by default;
+- `P_nominal` — nominal power, `1.0 kW` by default;
+- `system_efficiency` — total system efficiency, `0.85` by default;
+- `E_hour` — energy for the hour, kWh.
 
-Суточный прогноз — сумма `E_hour`. Базовая конфигурация: Одесса
-(`46.4775, 30.7326`), панели 1 kW, наклон 45°, южный азимут Open-Meteo `0°`.
+The daily forecast is the sum of `E_hour`. Base configuration: Odesa
+(`46.4775, 30.7326`), 1 kW panels, 45° tilt, and Open-Meteo south azimuth `0°`.
 
-## Политика Backup Reserve
+## Backup Reserve policy
 
-Пусть `E` — ожидаемая генерация на завтра в кВт·ч:
+Let `E` be tomorrow's expected generation in kWh:
 
 ```text
 E <= 1.0  -> 100%
 E >= 6.0  -> 20%
-иначе     -> round(116 - 16 * E), MidpointRounding.AwayFromZero
+otherwise -> round(116 - 16 * E), MidpointRounding.AwayFromZero
 ```
 
-Результат дополнительно ограничивается безопасным диапазоном `20..100%`.
+The result is additionally constrained to the safe range `20..100%`.
 
-| E, кВт·ч | Backup Reserve |
+| E, kWh | Backup Reserve |
 |---:|---:|
 | ≤ 1.0 | 100% |
 | 1.5 | 92% |
@@ -148,55 +148,56 @@ E >= 6.0  -> 20%
 | 5.5 | 28% |
 | ≥ 6.0 | 20% |
 
-**Backup Reserve не является верхним лимитом заряда.** Reserve определяет долю батареи,
-зарезервированную для резервного питания/energy management, тогда как charge upper
-ограничивает максимальный SOC. Автоматизация изменяет только Backup Reserve. Charge
-upper, нижний лимит заряда и выходы AC/DC доступны приложению только как статус и этой
-политикой не меняются.
+**Backup Reserve is not the upper charge limit.** Backup Reserve determines the portion
+of the battery reserved for backup power/energy management, while the upper charge limit
+caps the maximum SOC. The automation changes only Backup Reserve. The upper charge limit,
+lower charge limit, and AC/DC outputs are available to the application only as status and
+are not changed by this policy.
 
-## Защита управления
+## Control safeguards
 
-Исходная конфигурация поставляется с `ECOFLOW_CONTROL_ENABLED=false`. Перед командой
-проверяются:
+The source configuration ships with `ECOFLOW_CONTROL_ENABLED=false`. The following are
+checked before issuing a command:
 
-1. BLE connected и authenticated;
-2. свежесть статуса и прогноза;
-3. наличие и включённое состояние Backup Reserve;
-4. целое целевое значение в разрешённых границах;
-5. отсутствие файла manual override;
-6. persistent minimum interval после последней реально применённой записи;
-7. идемпотентность — совпадающее значение не записывается повторно.
+1. BLE is connected and authenticated;
+2. the status and forecast are fresh;
+3. Backup Reserve is available and enabled;
+4. the target is an integer within the permitted bounds;
+5. the manual override file is absent;
+6. the persistent minimum interval has elapsed since the last write that was actually
+   applied;
+7. idempotency — a matching value is not written again.
 
-Команды сериализуются. Bridge выполняет собственные проверки model/auth/freshness/bounds,
-использует подтверждённый метод `ha-ef-ble`
-`set_energy_backup_battery_level` и ждёт readback
-`energy_backup_battery_level`. Затем .NET выполняет отдельное повторное чтение статуса.
-Успех записи фиксируется только после обоих подтверждений. Состояние rate limit и JSONL
-аудит находятся вне репозитория.
+Commands are serialized. The bridge performs its own model/authentication/freshness/bounds
+checks, uses the verified `ha-ef-ble` method
+`set_energy_backup_battery_level`, and waits for the
+`energy_backup_battery_level` readback. .NET then performs a separate status read. A write
+is recorded as successful only after both confirmations. Rate-limit state and the JSONL
+audit log are stored outside the repository.
 
-Чтобы временно запретить автоматические записи без остановки мониторинга:
+To temporarily block automatic writes without stopping monitoring:
 
 ```bash
 touch ~/.local/share/ecoflow-energy-manager/manual-override
 ```
 
-Для возобновления:
+To resume:
 
 ```bash
 rm ~/.local/share/ecoflow-energy-manager/manual-override
 ```
 
-## Фактическая солнечная генерация
+## Actual solar generation
 
-Bridge возвращает мощность XT60 input 1, XT60 input 2 и их сумму. Каждую минуту
-`PvActualWorker` принимает только authenticated, свежие и физически допустимые значения
-(`0..2500 W`) и сохраняет sample в `solar_actual_samples` с источником
-`ecoflow_ble_xt60`. Это измерение входной мощности, а не уже интегрированная суточная
-энергия.
+The bridge returns the power of XT60 input 1, XT60 input 2, and their sum. Every minute,
+`PvActualWorker` accepts only authenticated, fresh, and physically plausible values
+(`0..2500 W`) and stores a sample in `solar_actual_samples` with the source
+`ecoflow_ble_xt60`. This measures input power, not already-integrated daily energy.
 
 ## PostgreSQL
 
-`ECOFLOW_POSTGRES_CONNECTION` обязателен. Схема создаётся приложением автоматически:
+`ECOFLOW_POSTGRES_CONNECTION` is required. The application creates the schema
+automatically:
 
 - `weather_forecast_runs`;
 - `weather_forecast_hourly`;
@@ -205,94 +206,96 @@ Bridge возвращает мощность XT60 input 1, XT60 input 2 и их 
 - `weather_model_accuracy_snapshots`;
 - `solar_actual_samples`.
 
-Рекомендуемое локальное подключение использует Unix socket и peer authentication.
-Пароль БД в репозитории не нужен.
+The recommended local connection uses a Unix socket and peer authentication. No database
+password is required in the repository.
 
-## Dashboard и API
+## Dashboard and API
 
-Локальный dashboard показывает подключение/аутентификацию, SOC, входную/выходную/сетевую
-мощность, XT60, AC и 12 V, read-only charge limits, Backup Reserve, время sample и
-stale/error status.
+The local dashboard shows connection/authentication, SOC, input/output/grid power, XT60,
+AC and 12 V, read-only charge limits, Backup Reserve, sample time, and stale/error status.
 
-Локальные endpoints:
+Local endpoints:
 
-- `GET /api/status` — обезличенный статус;
-- `GET /api/settings` — безопасные runtime settings;
-- `PUT /api/settings` — проверка, атомарное сохранение и применение settings без restart.
+- `GET /api/status` — sanitized status;
+- `GET /api/settings` — safe runtime settings;
+- `PUT /api/settings` — validation, atomic persistence, and application of settings
+  without a restart.
 
-API не возвращает User ID, serial, bridge URL, строку подключения к БД или raw BLE errors.
-Веб-интерфейс не предоставляет write endpoint управления устройством. Изменяемые settings:
-координаты, timezone, параметры панелей/расчёта, час запуска и freshness limits.
+The API does not return the User ID, serial number, bridge URL, database connection
+string, or raw BLE errors. The web interface provides no device-control write endpoint.
+Editable settings include coordinates, time zone, panel/calculation parameters, run hour,
+and freshness limits.
 
 ## Telegram outcome
 
-После **каждого** штатного запуска прогноза и `--once` вызывается настроенный локальный
-sender. Сообщение содержит:
+The configured local sender is called after **every** scheduled forecast run and every
+`--once` run. The message includes:
 
-- дату прогноза;
-- выбранную модель;
-- ожидаемую генерацию;
-- Backup Reserve до, рассчитанную цель и подтверждённый readback;
-- общий успех или ошибку.
+- forecast date;
+- selected model;
+- expected generation;
+- Backup Reserve before the run, calculated target, and confirmed readback;
+- overall success or error.
 
-При forecast/control failure отправляются доступные к моменту ошибки поля. Вызов sender
-ограничен timeout; штатный sender выполняет bounded retries. Ошибка доставки
-диагностируется, но не отменяет и не маскирует уже безопасно выполненное управление.
-Команда sender получает сообщение отдельным аргументом без shell interpolation.
+On forecast/control failure, fields available at the time of the error are sent. The
+sender invocation has a timeout; the standard sender performs bounded retries. A delivery
+failure is diagnosed but does not reverse or mask control that has already been completed
+safely. The sender command receives the message as a separate argument without shell
+interpolation.
 
-Токен, chat ID и другие данные Telegram хранятся только в защищённой локальной
-конфигурации sender вне репозитория. Не добавляйте их в environment example, unit,
-аргументы запуска или логи.
+The token, chat ID, and other Telegram data are stored only in the sender's protected
+local configuration outside the repository. Do not add them to the environment example,
+unit, launch arguments, or logs.
 
-## Конфигурация
+## Configuration
 
-Пример без секретов: `deploy/energy-manager.env.example`.
+Secret-free example: `deploy/energy-manager.env.example`.
 
-| Переменная | Назначение |
+| Variable | Purpose |
 |---|---|
-| `ECOFLOW_LATITUDE`, `ECOFLOW_LONGITUDE` | координаты массива |
-| `ECOFLOW_TIMEZONE` | IANA timezone |
-| `ECOFLOW_NOMINAL_POWER_KW` | номинальная мощность панелей |
-| `ECOFLOW_PANEL_TILT`, `ECOFLOW_PANEL_AZIMUTH` | геометрия массива |
-| `ECOFLOW_SYSTEM_EFFICIENCY` | системная эффективность |
-| `ECOFLOW_TEMPERATURE_COEFFICIENT` | температурный коэффициент |
-| `ECOFLOW_FORECAST_RUN_HOUR` | локальный час штатного расчёта |
-| `ECOFLOW_WEATHER_MODELS` | список моделей Open-Meteo |
-| `ECOFLOW_ACCURACY_WINDOW_DAYS` | окно оценки моделей |
-| `ECOFLOW_MIN_ACCURACY_SAMPLES` | минимум observations для выбора модели |
-| `ECOFLOW_POSTGRES_CONNECTION` | строка подключения PostgreSQL |
-| `ECOFLOW_MAX_STATUS_AGE_MINUTES` | допустимый возраст BLE status |
-| `ECOFLOW_MAX_FORECAST_AGE_MINUTES` | допустимый возраст forecast |
-| `ECOFLOW_CONTROL_ENABLED` | разрешение реального reserve control |
+| `ECOFLOW_LATITUDE`, `ECOFLOW_LONGITUDE` | array coordinates |
+| `ECOFLOW_TIMEZONE` | IANA time zone |
+| `ECOFLOW_NOMINAL_POWER_KW` | nominal panel power |
+| `ECOFLOW_PANEL_TILT`, `ECOFLOW_PANEL_AZIMUTH` | array geometry |
+| `ECOFLOW_SYSTEM_EFFICIENCY` | system efficiency |
+| `ECOFLOW_TEMPERATURE_COEFFICIENT` | temperature coefficient |
+| `ECOFLOW_FORECAST_RUN_HOUR` | local hour for the scheduled calculation |
+| `ECOFLOW_WEATHER_MODELS` | list of Open-Meteo models |
+| `ECOFLOW_ACCURACY_WINDOW_DAYS` | model evaluation window |
+| `ECOFLOW_MIN_ACCURACY_SAMPLES` | minimum number of observations for model selection |
+| `ECOFLOW_POSTGRES_CONNECTION` | PostgreSQL connection string |
+| `ECOFLOW_MAX_STATUS_AGE_MINUTES` | maximum permitted BLE status age |
+| `ECOFLOW_MAX_FORECAST_AGE_MINUTES` | maximum permitted forecast age |
+| `ECOFLOW_CONTROL_ENABLED` | enables actual reserve control |
 | `ECOFLOW_CONTROL_MIN_BACKUP_RESERVE`, `ECOFLOW_CONTROL_MAX_BACKUP_RESERVE` | safety bounds |
 | `ECOFLOW_CONTROL_MIN_INTERVAL_MINUTES` | persistent rate limit |
-| `ECOFLOW_MANUAL_OVERRIDE_FILE` | файл блокировки auto-control |
-| `ECOFLOW_CONTROL_STATE_PATH` | состояние последней записи |
-| `ECOFLOW_DECISION_LOG` | JSONL audit |
-| `ECOFLOW_BRIDGE_URL` | URL локального BLE bridge |
-| `OPEN_METEO_URL` | endpoint Open-Meteo |
-| `ECOFLOW_WEB_URLS` | адрес ASP.NET Core listener |
+| `ECOFLOW_MANUAL_OVERRIDE_FILE` | file that blocks automatic control |
+| `ECOFLOW_CONTROL_STATE_PATH` | state of the last write |
+| `ECOFLOW_DECISION_LOG` | JSONL audit log |
+| `ECOFLOW_BRIDGE_URL` | local BLE bridge URL |
+| `OPEN_METEO_URL` | Open-Meteo endpoint |
+| `ECOFLOW_WEB_URLS` | ASP.NET Core listener address |
 | `ECOFLOW_SETTINGS_PATH` | runtime settings JSON |
-| `ECOFLOW_TELEGRAM_COMMAND` | абсолютный путь к локальному sender |
-| `ECOFLOW_TELEGRAM_TIMEOUT_SECONDS` | общий timeout sender |
+| `ECOFLOW_TELEGRAM_COMMAND` | absolute path to the local sender |
+| `ECOFLOW_TELEGRAM_TIMEOUT_SECONDS` | overall sender timeout |
 
-Секреты и локальные идентификаторы не должны находиться в Git:
+Secrets and local identifiers must not be stored in Git:
 
-- EcoFlow User ID и BLE authentication state;
-- serial устройства;
-- пароли/connection strings с паролями;
+- EcoFlow User ID and BLE authentication state;
+- device serial number;
+- passwords/connection strings containing passwords;
 - Telegram token/chat ID;
-- локальные runtime state, audit logs и settings.
+- local runtime state, audit logs, and settings.
 
-## Сборка, запуск и тесты
+## Build, run, and tests
 
-Требования:
+Requirements:
 
-- Linux с BlueZ и Bluetooth-контроллером — для bridge;
+- Linux with BlueZ and a Bluetooth controller — for the bridge;
 - .NET SDK 8;
-- Python 3 и совместимая версия `ha-ef-ble` — для внешнего bridge;
+- Python 3 and a compatible version of `ha-ef-ble` — for the external bridge;
 - PostgreSQL;
-- доступ к keyless Open-Meteo API.
+- access to the keyless Open-Meteo API.
 
 ```bash
 dotnet restore EcoFlow.EnergyManager.sln
@@ -300,17 +303,17 @@ dotnet build EcoFlow.EnergyManager.sln -c Release
 dotnet test EcoFlow.EnergyManager.sln -c Release
 ```
 
-Для разработки можно открыть `EcoFlow.EnergyManager.sln` в Visual Studio 2022+.
+For development, open `EcoFlow.EnergyManager.sln` in Visual Studio 2022+.
 
-## Развёртывание через systemd
+## Deployment with systemd
 
-Репозиторий содержит:
+The repository contains:
 
 - `deploy/ecoflow-energy-manager.service` — user unit;
-- `deploy/ecoflow-energy-manager-control.conf` — reviewed drop-in активного control;
-- `deploy/energy-manager.env.example` — безопасный шаблон environment.
+- `deploy/ecoflow-energy-manager-control.conf` — reviewed drop-in for active control;
+- `deploy/energy-manager.env.example` — safe environment template.
 
-Типовая последовательность на целевом Linux-хосте:
+Typical sequence on the target Linux host:
 
 ```bash
 dotnet build EcoFlow.EnergyManager.sln -c Release
@@ -321,9 +324,9 @@ systemctl --user enable --now ecoflow-ble-bridge.service
 systemctl --user enable --now ecoflow-energy-manager.service
 ```
 
-Environment-файл создаётся вручную вне репозитория с mode `0600`. Перед включением
-control проверьте bridge, модель устройства, bounds, manual override и readback. Только
-после такой проверки активный drop-in можно установить отдельно:
+The environment file is created manually outside the repository with mode `0600`. Before
+enabling control, verify the bridge, device model, bounds, manual override, and readback.
+Only after that verification may the active drop-in be installed separately:
 
 ```bash
 install -m 0644 deploy/ecoflow-energy-manager-control.conf ~/.config/systemd/user/ecoflow-energy-manager.service.d/control.conf
@@ -331,7 +334,7 @@ systemctl --user daemon-reload
 systemctl --user restart ecoflow-energy-manager.service
 ```
 
-Проверка:
+Verification:
 
 ```bash
 systemctl --user status ecoflow-ble-bridge.service ecoflow-energy-manager.service --no-pager
@@ -342,22 +345,23 @@ journalctl --user -u ecoflow-energy-manager.service --no-pager -n 100
 
 ## Troubleshooting
 
-- **BLE не подключается:** закройте/отключите EcoFlow phone app — устройство допускает
-  только одно активное BLE-подключение; затем проверьте BlueZ и journal bridge.
-- **Control blocked / stale:** проверьте время `sampled_utc`, connectivity/authentication
-  bridge и freshness limits.
-- **Control rate limit is active:** дождитесь интервала. Не удаляйте state для обхода
-  штатного ограничения; для санкционированного one-shot используйте только временный
+- **BLE does not connect:** close/disconnect the EcoFlow phone app — the device permits
+  only one active BLE connection; then check BlueZ and the bridge journal.
+- **Control blocked / stale:** check the `sampled_utc` time, bridge
+  connectivity/authentication, and freshness limits.
+- **Control rate limit is active:** wait for the interval to elapse. Do not delete state
+  to bypass the normal restriction; for an authorized one-shot, use only a temporary
   process-level override.
-- **Manual override is active:** убедитесь, что блокировка действительно должна быть снята,
-  затем удалите только документированный marker file.
-- **Open-Meteo error/неполный день:** проверьте сеть, endpoint, список models и наличие
-  минимум 20 samples.
-- **PostgreSQL error:** проверьте доступность БД, peer/user permissions и environment.
-- **Telegram failed:** проверьте локальный sender и его защищённый environment; reserve
-  control не откатывается из-за ошибки Telegram.
-- **Readback mismatch:** не повторяйте команды вслепую; проверьте journal bridge, свежий
-  статус и отсутствие второго BLE-клиента.
+- **Manual override is active:** make sure the block should actually be removed, then
+  delete only the documented marker file.
+- **Open-Meteo error/incomplete day:** check the network, endpoint, model list, and the
+  presence of at least 20 samples.
+- **PostgreSQL error:** check database availability, peer/user permissions, and the
+  environment.
+- **Telegram failed:** check the local sender and its protected environment; reserve
+  control is not rolled back because of a Telegram error.
+- **Readback mismatch:** do not repeat commands blindly; check the bridge journal, fresh
+  status, and the absence of a second BLE client.
 
 ## Technology stack
 
@@ -366,18 +370,20 @@ journalctl --user -u ecoflow-energy-manager.service --no-pager -n 100
 - **BackgroundService**, **HttpClient**, **System.Text.Json**;
 - **Npgsql / PostgreSQL**;
 - **xUnit**;
-- **Python 3**, **ha-ef-ble**, **BlueZ**, **Bluetooth LE** — отдельный локальный bridge;
+- **Python 3**, **ha-ef-ble**, **BlueZ**, **Bluetooth LE** — separate local bridge;
 - **Open-Meteo** keyless forecast/current APIs;
 - **systemd user services**;
-- локальный **Telegram sender** OpenClaw;
+- local OpenClaw **Telegram sender**;
 - **Linux**.
 
-## Ограничения и безопасность
+## Limitations and safety
 
-- Решение рассчитано на подтверждённую модель DELTA 2 Max и локальный single-device bridge.
-- Dashboard/bridge должны оставаться localhost-only.
-- Не публикуйте User ID, serial, токены, auth/session material или локальные state files.
-- Не подменяйте Backup Reserve нижним/верхним charge limit.
-- Автоматизация не управляет AC/DC outputs.
-- Измерения XT60 пока сохраняются как power samples; интеграция в фактическую суточную
-  энергию и автоматическая калибровка потерь не заявлены.
+- The solution is designed for the verified DELTA 2 Max model and a local single-device
+  bridge.
+- The dashboard and bridge must remain localhost-only.
+- Do not publish the User ID, serial number, tokens, authentication/session material, or
+  local state files.
+- Do not substitute lower/upper charge limits for Backup Reserve.
+- The automation does not control AC/DC outputs.
+- XT60 measurements are currently stored as power samples; integration into actual daily
+  energy and automatic loss calibration are not claimed.
