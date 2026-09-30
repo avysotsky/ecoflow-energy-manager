@@ -25,6 +25,9 @@ public sealed class ForecastRunner(
         {
             status = await gateway.GetStatusAsync(cancellationToken);
             var weatherForecasts = await weatherProvider.GetTomorrowForecastsAsync(cancellationToken);
+            // A weather outage may keep this run alive for up to an hour. Refresh the
+            // device snapshot so control never evaluates against the pre-retry status.
+            status = await gateway.GetStatusAsync(cancellationToken);
             var modelForecasts = weatherForecasts.Select(item => new ModelSolarForecast
             {
                 Model = item.Model,

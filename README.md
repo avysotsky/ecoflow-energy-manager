@@ -261,6 +261,8 @@ Secret-free example: `deploy/energy-manager.env.example`.
 | `ECOFLOW_TEMPERATURE_COEFFICIENT` | temperature coefficient |
 | `ECOFLOW_FORECAST_RUN_HOUR` | local hour for the scheduled calculation |
 | `ECOFLOW_WEATHER_MODELS` | list of Open-Meteo models |
+| `ECOFLOW_WEATHER_RETRY_INTERVAL_SECONDS` | delay between failed weather requests; default 60 seconds |
+| `ECOFLOW_WEATHER_RETRY_WINDOW_MINUTES` | maximum weather retry period; default 60 minutes |
 | `ECOFLOW_ACCURACY_WINDOW_DAYS` | model evaluation window |
 | `ECOFLOW_MIN_ACCURACY_SAMPLES` | minimum number of observations for model selection |
 | `ECOFLOW_POSTGRES_CONNECTION` | PostgreSQL connection string |
@@ -354,8 +356,9 @@ journalctl --user -u ecoflow-energy-manager.service --no-pager -n 100
   process-level override.
 - **Manual override is active:** make sure the block should actually be removed, then
   delete only the documented marker file.
-- **Open-Meteo error/incomplete day:** check the network, endpoint, model list, and the
-  presence of at least 20 samples.
+- **Open-Meteo error/incomplete day:** the forecast run retries once per minute for up
+  to one hour before reporting failure. If all attempts fail, check the network,
+  endpoint, model list, and the presence of at least 20 samples.
 - **PostgreSQL error:** check database availability, peer/user permissions, and the
   environment.
 - **Telegram failed:** check the local sender and its protected environment; reserve

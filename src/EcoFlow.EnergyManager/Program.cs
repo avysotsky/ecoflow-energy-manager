@@ -38,10 +38,16 @@ builder.Services.AddHttpClient("weather", client =>
 builder.Services.AddSingleton<IEcoFlowGateway>(services =>
     new LocalBridgeEcoFlowGateway(
         services.GetRequiredService<IHttpClientFactory>().CreateClient("bridge")));
-builder.Services.AddSingleton<IWeatherProvider>(services =>
+builder.Services.AddSingleton<OpenMeteoWeatherProvider>(services =>
     new OpenMeteoWeatherProvider(
         services.GetRequiredService<IHttpClientFactory>().CreateClient("weather"),
         services.GetRequiredService<IRuntimeSettingsProvider>()));
+builder.Services.AddSingleton<IWeatherProvider>(services =>
+    new RetryingWeatherProvider(
+        services.GetRequiredService<OpenMeteoWeatherProvider>(),
+        services.GetRequiredService<IRuntimeSettingsProvider>(),
+        services.GetRequiredService<TimeProvider>(),
+        services.GetRequiredService<ILogger<RetryingWeatherProvider>>()));
 builder.Services.AddSingleton<IActualWeatherProvider>(services =>
     new OpenMeteoActualWeatherProvider(
         services.GetRequiredService<IHttpClientFactory>().CreateClient("weather"),

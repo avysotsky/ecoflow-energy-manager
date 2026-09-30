@@ -15,6 +15,8 @@ public sealed record EnergyManagerOptions
     public int ForecastRunHourLocal { get; init; } = 23;
     public int AccuracyWindowDays { get; init; } = 60;
     public int MinimumAccuracySamples { get; init; } = 24;
+    public TimeSpan WeatherRetryInterval { get; init; } = TimeSpan.FromMinutes(1);
+    public TimeSpan WeatherRetryWindow { get; init; } = TimeSpan.FromHours(1);
     public string[] WeatherModels { get; init; } =
     [
         "ecmwf_ifs025",
@@ -58,6 +60,10 @@ public sealed record EnergyManagerOptions
         ForecastRunHourLocal = ReadInt("ECOFLOW_FORECAST_RUN_HOUR", 23, 0, 23),
         AccuracyWindowDays = ReadInt("ECOFLOW_ACCURACY_WINDOW_DAYS", 60, 7, 365),
         MinimumAccuracySamples = ReadInt("ECOFLOW_MIN_ACCURACY_SAMPLES", 24, 1, 10000),
+        WeatherRetryInterval = TimeSpan.FromSeconds(
+            ReadDouble("ECOFLOW_WEATHER_RETRY_INTERVAL_SECONDS", 60, 1, 3600)),
+        WeatherRetryWindow = TimeSpan.FromMinutes(
+            ReadDouble("ECOFLOW_WEATHER_RETRY_WINDOW_MINUTES", 60, 1, 1440)),
         WeatherModels = ReadList(
             "ECOFLOW_WEATHER_MODELS",
             ["ecmwf_ifs025", "icon_seamless", "gfs_seamless", "ecmwf_aifs025_single"]),
@@ -110,6 +116,13 @@ public sealed record EnergyManagerOptions
         if (WeatherModels.Length == 0)
         {
             throw new InvalidOperationException("At least one weather model must be configured.");
+        }
+
+        if (WeatherRetryInterval > WeatherRetryWindow)
+        {
+            throw new InvalidOperationException(
+                "ECOFLOW_WEATHER_RETRY_INTERVAL_SECONDS must not exceed " +
+                "ECOFLOW_WEATHER_RETRY_WINDOW_MINUTES.");
         }
 
         return this;
